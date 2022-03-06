@@ -65,4 +65,4 @@
 
 * linguist-vendored
 [Ll]ib/* linguist-vendored=false
-[Ss]rc/* linguist-vendored=true
+*.cpp linguist-vendored=true
