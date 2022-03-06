@@ -63,6 +63,5 @@
 #*.RTF   diff=astextplain
 
 
-* linguist-vendored
-[Ll]ib/* linguist-vendored=false
-*.cpp linguist-vendored=true
+[Ll]ib/*  linguist-vendored
+stb_image.h linguist-vendored=false
