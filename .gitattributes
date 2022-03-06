@@ -64,4 +64,4 @@
 
 
 * linguist-vendored
-[Ll]ib/ linguist-vendored=false
+[Ll]ib/* linguist-vendored=false
