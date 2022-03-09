@@ -10,6 +10,8 @@ class VoronoiPoint
 {
 public:
 
+	static int pixelRadius;				// Width of voronoi point render in pixels.
+
 	VoronoiPoint(const Vector2D& position, const PixelRGB& normalEncoding, int zone = 0);
 	VoronoiPoint(const Vector2D& position, const SDL_Color& normalEncoding, int zone = 0);
 	~VoronoiPoint();
@@ -24,8 +26,6 @@ public:
 	void Set_NormalEncoding(const SDL_Color& normalEncoding);
 
 private:
-
-	static int pixelRadius;				// Width of voronoi point render in pixels.
 
 	int zoneIndex;						// Zone this point is inside of.
 

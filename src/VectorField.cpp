@@ -16,10 +16,8 @@ VectorField::~VectorField()
 
 void VectorField::InitializeVectors(const std::vector<std::vector<std::shared_ptr<DynamicColor>>>& pixmap, float lineLength)
 {
-    int maxX = pixmap.size() - padding;
-    int maxY = pixmap[0].size() - padding;
-    int spacingX = (maxX - padding) / sizeX;
-    int spacingY = (maxY - padding) / sizeY;
+    int maxX = pixmap.size() - padding - padding;
+    int maxY = pixmap[0].size() - padding - padding;
 
     fieldLines.resize(sizeX);
     for (int x = 0; x < sizeX; x++)
@@ -28,8 +26,10 @@ void VectorField::InitializeVectors(const std::vector<std::vector<std::shared_pt
         temp.reserve(sizeY);
         for (int y = 0; y < sizeY; y++)
         {
-            Vector2D pos = Vector2D((x * spacingX) + padding, (y * spacingY) + padding);
-            
+            float interpX = (float)x / (sizeX - 1);
+            float interpY = (float)y / (sizeY - 1);
+            Vector2D pos = Vector2D((interpX * maxX) + padding, (interpY * maxY) + padding);
+
             int pixX = (int)pos[0];
             int pixY = (int)pos[1];
             

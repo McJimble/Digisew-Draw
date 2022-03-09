@@ -6,6 +6,7 @@
 
 #include <SDL2/SDL.h>
 
+#include "IntersectionNode.h"
 #include "VoronoiPoint.h"
 #include "PixelRGB.h"
 #include "Helpers.h"
@@ -45,13 +46,20 @@ public:
 	 */
 	void SetVoronoiZone(int newZoneID);
 
+	float Get_VornoiDensity();
 	const PixelRGB* Get_AffectedPixel();
+	const Vector2D& Get_PixelPosition();
+	VoronoiPoint* Get_MinPoint();
 
 private:
 
 	// Value between 0 - 1 that determines the voronoi density that creates black
 	// pixels. Should ideally be really close one to avoid distorted edges.
 	static float edgeThreshold;
+
+	// 2 intersection nodes that form triangle it's within.
+	std::pair<std::shared_ptr<IntersectionNode>, std::shared_ptr<IntersectionNode>> triangulationNodes;	
+	Vector2D barycentricCoords;		// Barycentric coordinates in triangle with nodes. MinPt below is the origin.
 
 	std::shared_ptr<VoronoiPoint> minPt;		// Closest voronoi point to this pixel
 	std::shared_ptr<VoronoiPoint> secondMinPt;	// 2nd closest point to this pixel; used for determining density.

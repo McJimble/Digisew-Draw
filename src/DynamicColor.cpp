@@ -92,7 +92,7 @@ void DynamicColor::DensityToColor()
     float remapDensity = Helpers::Lerp(0.0f, 0.5f, voronoiDensity);
     Helpers::LerpColor(minPt->Get_NormalEncoding(),
                        (secondMinPt) ? secondMinPt->Get_NormalEncoding() : minPt->Get_NormalEncoding(),
-                       voronoiDensity,
+                       remapDensity,
                        affectedPixel);
                      
 }
@@ -102,7 +102,22 @@ void DynamicColor::SetVoronoiZone(int newZoneID)
     this->voronoiZone = newZoneID;
 }
 
+float DynamicColor::Get_VornoiDensity()
+{
+    return voronoiDensity;
+}
+
 const PixelRGB* DynamicColor::Get_AffectedPixel()
 {
     return affectedPixel;
+}
+
+const Vector2D& DynamicColor::Get_PixelPosition()
+{
+    return pixPosition;
+}
+
+VoronoiPoint* DynamicColor::Get_MinPoint()
+{
+    return minPt.get();
 }

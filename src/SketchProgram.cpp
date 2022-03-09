@@ -32,15 +32,25 @@ void SketchProgram::Initialize()
     // Parse with default texture for now
     // (TODO: get image via command line or other method)
     std::string filename;
-    std::cout << "Enter file name for region image:" << std::endl;
-    std::cin >> filename;
+    std::string useDefault;
+    std::cout << "Would you like to use a custom zone image? (Y/N)" << std::endl;
+    std::cin >> useDefault;
+    if (useDefault == "Y" || useDefault == "y")
+    {
+        std::cout << "Enter file name for region image:" << std::endl;
+        std::cin >> filename;
+    }
+    else
+    {
+        filename = "oneZone.png";
+    }
 
     ParseZoneMap(filename);
 
     // Arbitrary default values.
     fieldX = 32;
     fieldY = 18;
-    fieldPadding = 50;
+    fieldPadding = 30;
     mainVecField = std::make_shared<VectorField>(fieldX, fieldY, fieldPadding, SDL_Color {0, 0, 0, 255});
     mainVecField->InitializeVectors(normalMapColors, 20);
 
@@ -286,10 +296,8 @@ void SketchProgram::ParseZoneMap(const std::string& filename)
         }
     }
 
-        
-
-    pixelsToUpdate.reserve(normalMapColors.size() * normalMapColors[0].size());
     pixelsToUpdate.clear();
+    pixelsToUpdate.reserve(normalMapColors.size() * normalMapColors[0].size());
     voronoiPoints.clear();
 }
 
@@ -383,6 +391,46 @@ void SketchProgram::EmplaceVoronoiPoint(SketchLine* editLine)
         }
 
     voronoiPoints.push_back(std::move(newPoint));
+
+    // Check all pixels surrounding this one; if 3 unique min voronoi points are detected,
+    // then we have found an intersection and will create a node.
+    // If a pixel goes out of bounds and 2 unique point are detected, then we have an
+    // intersection node along the EDGE of the screen.
+    for (auto& pix : pixelsToUpdate)
+    {
+        int pixX = std::lround(pix->Get_PixelPosition()[0]);
+        int pixY = std::lround(pix->Get_PixelPosition()[1]);
+
+        // If density is not high (aka not far from a voronoi point), save cpu time
+        // by not creating intersection node since it's not possible to be there.
+        if (pix->Get_VornoiDensity() < 0.9f) continue;
+
+        // 3 nested loops might seem bad, but they are all relatively small and never exceed 3 iterations.
+        std::vector<VoronoiPoint*> uniquePoints;
+        int OOBx = 0;
+        int OOBy = 0;
+        for (int x = -1; x <= 1; x++)
+            for (int y = -1; y <= 1; y++)
+            {
+                if (uniquePoints.size() + OOBx + OOBy)
+                {
+
+                }
+
+                int checkX = pixX + x;
+                int checkY = pixY + y;
+
+                if (checkX < 0)
+
+                for (auto& pt : uniquePoints)
+                {
+                    if (pt == normalMapColors[checkX][checkY]->Get_MinPoint()) continue;
+                    
+                    uniquePoints.push_back(pix->Get_MinPoint());
+                    break;
+                }
+            }
+    }
 
     // With updated pixel info, recreate texture
     SDL_DestroyTexture(normalMapTexture);
