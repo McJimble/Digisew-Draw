@@ -5,6 +5,7 @@
 #include <vector>
 #include <set>
 #include <memory>
+#include <unordered_map>
 
 
 #include <SDL2/SDL.h>
@@ -63,6 +64,7 @@ private:
 
 	PixelRGB** normalMapPixels;													// Actual pixels displayed on texture.
 	SDL_Texture* normalMapTexture;												// Texture being displayed/changed in background.
+	std::unordered_map<int, std::shared_ptr<IntersectionNode>> createdNodes;	// Intersection nodees that have been created thus far (where edges connect)
 	std::vector<std::vector<int>> voronoiZonesByPixel;							// Voronoi zone for each pixel on screen.
 	std::vector<std::vector<std::shared_ptr<DynamicColor>>> normalMapColors;	// Colors being sent by normal map sketches
 	std::vector<std::shared_ptr<DynamicColor>> pixelsToUpdate;					// Pixels that will be updated this frame.

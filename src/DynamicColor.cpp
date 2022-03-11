@@ -1,4 +1,5 @@
 #include "DynamicColor.h"
+#include "Vector3D.h"
 #include <iostream>
 
 float DynamicColor::edgeThreshold = 0.99f;
@@ -36,6 +37,7 @@ void DynamicColor::UpdatePixel()
 
     //DensityToLuminosity();
     //DensityToColor();
+    //BarycentricToColor();
 }
 
 bool DynamicColor::TryAddMinPoint(const std::shared_ptr<VoronoiPoint>& newPoint)
@@ -59,7 +61,6 @@ bool DynamicColor::TryAddMinPoint(const std::shared_ptr<VoronoiPoint>& newPoint)
     {
         secondMinPt = newPoint;
         secondMinPtDistance = sqrDistNew;
-        return true;
     }
 
     return false;
@@ -94,12 +95,35 @@ void DynamicColor::DensityToColor()
                        (secondMinPt) ? secondMinPt->Get_NormalEncoding() : minPt->Get_NormalEncoding(),
                        remapDensity,
                        affectedPixel);
-                     
+}
+
+void DynamicColor::BarycentricToColor()
+{
+    Vector3D additiveColor;
+    const PixelRGB& colA = minPt->Get_NormalEncoding();
+    const PixelRGB& colB = triNodeA->Get_AverageColor();
+    const PixelRGB& colC = triNodeB->Get_AverageColor();
+
+    additiveColor[0] = baryU * colA.r + baryV * colB.r + baryW * colC.r;
+    additiveColor[1] = baryU * colA.g + baryV * colB.g + baryW * colC.g;
+    additiveColor[2] = baryU * colA.b + baryV * colB.b + baryW * colC.b;
+
+    affectedPixel->r = (Uint8)additiveColor[0];
+    affectedPixel->g = (Uint8)additiveColor[1];
+    affectedPixel->b = (Uint8)additiveColor[2];
 }
 
 void DynamicColor::SetVoronoiZone(int newZoneID)
 {
     this->voronoiZone = newZoneID;
+}
+
+void DynamicColor::Set_TriangulationNodes(const std::shared_ptr<IntersectionNode>& a, const std::shared_ptr<IntersectionNode>& b, const Vector2D& origin)
+{
+    triNodeA = a;
+    triNodeB = b;
+    Helpers::ComputeBarycentricCoordinates(pixPosition, minPt->Get_Position(), a->Get_Position(), b->Get_Position(),
+        baryU, baryV, baryW);
 }
 
 float DynamicColor::Get_VornoiDensity()

@@ -6,7 +6,6 @@
 
 #include <SDL2/SDL.h>
 
-#include "IntersectionNode.h"
 #include "VoronoiPoint.h"
 #include "PixelRGB.h"
 #include "Helpers.h"
@@ -46,11 +45,13 @@ public:
 	 */
 	void SetVoronoiZone(int newZoneID);
 
+	void Set_TriangulationNodes(const std::shared_ptr<IntersectionNode>& a, const std::shared_ptr<IntersectionNode>& b, const Vector2D& origin);
+
 	float Get_VornoiDensity();
 	const PixelRGB* Get_AffectedPixel();
 	const Vector2D& Get_PixelPosition();
 	VoronoiPoint* Get_MinPoint();
-
+	
 private:
 
 	// Value between 0 - 1 that determines the voronoi density that creates black
@@ -58,8 +59,9 @@ private:
 	static float edgeThreshold;
 
 	// 2 intersection nodes that form triangle it's within.
-	std::pair<std::shared_ptr<IntersectionNode>, std::shared_ptr<IntersectionNode>> triangulationNodes;	
-	Vector2D barycentricCoords;		// Barycentric coordinates in triangle with nodes. MinPt below is the origin.
+	std::shared_ptr<IntersectionNode> triNodeA;
+	std::shared_ptr<IntersectionNode> triNodeB;
+	float baryU, baryV, baryW;	// Barycentric coordinates used for interpolating color.
 
 	std::shared_ptr<VoronoiPoint> minPt;		// Closest voronoi point to this pixel
 	std::shared_ptr<VoronoiPoint> secondMinPt;	// 2nd closest point to this pixel; used for determining density.
@@ -84,9 +86,14 @@ private:
 	// based on the voronoi density.
 	void DensityToLuminosity();
 
+	// OUTDATED
 	// Change the affect pixel's value (in hsv space) based on the voronoi
 	// density that is currently applied.
 	void DensityToColor();
+
+	// Change the affected pixel's value based on the current barycentric coordinates
+	// the pixel has within a triangle formed by voronoi points / nodes.
+	void BarycentricToColor();
 };
 
 

@@ -87,6 +87,18 @@ public:
 	 *  Linearly interpolates between two colors, and returns it into ret.
 	 */
 	static void LerpColor(const PixelRGB& c1, const PixelRGB& c2, float t, PixelRGB* ret);
+
+	/*
+	 *	Computes barycentric coordinates of a point within a triangle; assumes the z-axis does
+	 *  not exist in order to have a more efficient algorithm.
+	 */
+	static void ComputeBarycentricCoordinates(const Vector2D& p, const Vector2D& a, const Vector2D& b, const Vector2D& c, float& u, float& v, float& w);
+
+	/*
+	 *	Determines whether point P interesects with the triangle formed by a, b, and c,
+	 *	using point a as the origin. Algorithm is from: https://mathworld.wolfram.com/TriangleInterior.html
+	 */
+	static bool PointTriangleIntersection(const Vector2D& p, const Vector2D& aOrigin, const Vector2D& b, const Vector2D& c);
 };
 
 #endif
