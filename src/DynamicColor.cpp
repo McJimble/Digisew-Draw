@@ -37,7 +37,7 @@ void DynamicColor::UpdatePixel()
 
     //DensityToLuminosity();
     //DensityToColor();
-    //BarycentricToColor();
+    BarycentricToColor();
 }
 
 bool DynamicColor::TryAddMinPoint(const std::shared_ptr<VoronoiPoint>& newPoint)
@@ -99,14 +99,15 @@ void DynamicColor::DensityToColor()
 
 void DynamicColor::BarycentricToColor()
 {
+    if (!minPt || !triNodeA || !triNodeB) return; // For sanity
     Vector3D additiveColor;
     const PixelRGB& colA = minPt->Get_NormalEncoding();
     const PixelRGB& colB = triNodeA->Get_AverageColor();
     const PixelRGB& colC = triNodeB->Get_AverageColor();
 
-    additiveColor[0] = baryU * colA.r + baryV * colB.r + baryW * colC.r;
-    additiveColor[1] = baryU * colA.g + baryV * colB.g + baryW * colC.g;
-    additiveColor[2] = baryU * colA.b + baryV * colB.b + baryW * colC.b;
+    additiveColor[0] = Helpers::Clamp(baryU * colA.r + baryV * colB.r + baryW * colC.r, 0, 255);
+    additiveColor[1] = Helpers::Clamp(baryU * colA.g + baryV * colB.g + baryW * colC.g, 0, 255);
+    additiveColor[2] = Helpers::Clamp(baryU * colA.b + baryV * colB.b + baryW * colC.b, 0, 255);
 
     affectedPixel->r = (Uint8)additiveColor[0];
     affectedPixel->g = (Uint8)additiveColor[1];
@@ -118,12 +119,22 @@ void DynamicColor::SetVoronoiZone(int newZoneID)
     this->voronoiZone = newZoneID;
 }
 
-void DynamicColor::Set_TriangulationNodes(const std::shared_ptr<IntersectionNode>& a, const std::shared_ptr<IntersectionNode>& b, const Vector2D& origin)
+bool DynamicColor::Set_TriangulationNodes(IntersectionNode* a, IntersectionNode* b, const Vector2D& origin)
 {
+    Helpers::ComputeBarycentricCoordinates(pixPosition, origin, a->Get_Position(), b->Get_Position(),
+        baryU, baryV, baryW);
+
     triNodeA = a;
     triNodeB = b;
-    Helpers::ComputeBarycentricCoordinates(pixPosition, minPt->Get_Position(), a->Get_Position(), b->Get_Position(),
-        baryU, baryV, baryW);
+    baryU = Helpers::Clamp(baryU, 0.0f, 1.0f);
+    baryV = Helpers::Clamp(baryV, 0.0f, 1.0f);
+    baryW = Helpers::Clamp(baryW, 0.0f, 1.0f);
+    return true;
+}
+
+bool DynamicColor::ContainsNode(IntersectionNode* node)
+{
+    return (node == triNodeA || node == triNodeB);
 }
 
 float DynamicColor::Get_VornoiDensity()

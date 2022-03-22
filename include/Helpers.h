@@ -99,6 +99,13 @@ public:
 	 *	using point a as the origin. Algorithm is from: https://mathworld.wolfram.com/TriangleInterior.html
 	 */
 	static bool PointTriangleIntersection(const Vector2D& p, const Vector2D& aOrigin, const Vector2D& b, const Vector2D& c);
+
+	/*
+	 *	If val is greater than max or less than min, value returned
+	 *  returned is min or min respectively; effectively ensuring val
+	 *  always lies between min and max.
+	 */
+	static float Clamp(float val, float min, float max);
 };
 
 #endif

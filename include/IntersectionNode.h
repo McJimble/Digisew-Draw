@@ -21,7 +21,7 @@ public:
 
 	static int maxPoints;
 
-	IntersectionNode(const Vector2D& setPosition, std::vector<VoronoiPoint*> intersectingPoints);
+	IntersectionNode(const Vector2D& setPosition, const std::vector<VoronoiPoint*>& intersectingPoints);
 
 	// Forces node to update its color based on current values of connected points
 	void UpdateColor();
@@ -29,23 +29,20 @@ public:
 	// Render where the intersection node is (currently just for debugging purposes.
 	void RenderNode(SDL_Renderer* rend);
 
-	// If a new point was placed closer than the distance the node is from its
-	// equidistant voronoi points, then it should be dissolved and deleted.
-	bool CheckForShouldDissolve(VoronoiPoint* newPoint);
-
 	int Get_ID() const;
 	const Vector2D& Get_Position() const;
 	const PixelRGB& Get_AverageColor() const;
+
+	bool EnvelopesSamePoints(const IntersectionNode& other) const;
 
 private:
 
 	static int nextID;
 
-	// List of points this connects, paired with their distance from this node.
-	std::vector<std::pair<float, std::shared_ptr<VoronoiPoint>>> intersectingPoints;
+	// List of points this connects.
+	std::vector<VoronoiPoint*> intersectingPoints;
 
 	int identifier;
 	Vector2D position;
 	PixelRGB averageColor;
-	float pointsDistance;
 };

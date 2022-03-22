@@ -2,12 +2,14 @@
 #include <algorithm>
 
 int VoronoiPoint::pixelRadius = 2;
+int VoronoiPoint::nextID = 0;
 
 VoronoiPoint::VoronoiPoint(const Vector2D& position, const PixelRGB& normalEncoding, int zone)
 {
 	this->normalEncoding	= normalEncoding;
 	this->position			= position;
 	this->zoneIndex			= zone;
+	this->id = nextID++;
 }
 
 VoronoiPoint::VoronoiPoint(const Vector2D& position, const SDL_Color& normalEncoding, int zone)
@@ -18,22 +20,48 @@ VoronoiPoint::VoronoiPoint(const Vector2D& position, const SDL_Color& normalEnco
 
 	this->position	= position;
 	this->zoneIndex = zone;
+	this->id = nextID++;
 }
 
 void VoronoiPoint::RenderPoint(SDL_Renderer* rend)
 {
+	SDL_SetRenderDrawColor(rend, 0, 0, 0, 255);
 	for (int x = -pixelRadius; x < pixelRadius; x++)
 		for (int y = -pixelRadius; y < pixelRadius; y++)
 		{
 			SDL_RenderDrawPoint(rend, position[0] + x, position[1] + y);
 		}
+
+	for (auto& node : neighboringNodes)
+		node->RenderNode(rend);
+
+	RenderFormedTriangles(rend);
+}
+
+void VoronoiPoint::RenderFormedTriangles(SDL_Renderer* rend)
+{
+	SDL_Color oldCol;
+	SDL_GetRenderDrawColor(rend, &oldCol.r, &oldCol.g, &oldCol.b, &oldCol.a);
+	SDL_SetRenderDrawColor(rend, 0, 0, 0, 255);
+
+	for (int i = 0; i < neighboringNodes.size(); i++)
+	{
+		Vector2D cur = neighboringNodes[i]->Get_Position();
+		Vector2D nxt = neighboringNodes[(i + 1) % neighboringNodes.size()]->Get_Position();
+		SDL_RenderDrawLine(rend, cur[0], cur[1], nxt[0], nxt[1]);
+
+		//SDL_RenderDrawLine(rend, position[0], position[1], cur[0], cur[1]);
+		//SDL_RenderDrawLine(rend, position[0], position[1], nxt[0], nxt[1]);
+	}
+
+	SDL_SetRenderDrawColor(rend, oldCol.r, oldCol.g, oldCol.b, oldCol.a);
 }
 
 void VoronoiPoint::AddNode(IntersectionNode* node)
 {
 	if (neighboringNodes.empty())
 	{
-		neighboringNodes.push_back(std::shared_ptr<IntersectionNode>(node));
+		neighboringNodes.push_back(node);
 		return;
 	}
 
@@ -45,13 +73,13 @@ void VoronoiPoint::AddNode(IntersectionNode* node)
 		float neighborAngle = (neighboringNodes[i]->Get_Position() - position).Angle();
 		if (neighborAngle < newAngle)
 		{
-			neighboringNodes.insert(neighboringNodes.begin() + i, std::shared_ptr<IntersectionNode>(node));
+			neighboringNodes.insert(neighboringNodes.begin() + i, node);
 			break;
 		}
 
 		if (i == neighboringNodes.size() - 1)
 		{
-			neighboringNodes.push_back(std::shared_ptr<IntersectionNode>(node));
+			neighboringNodes.push_back(node);
 			break;
 		}
 	}
@@ -59,8 +87,7 @@ void VoronoiPoint::AddNode(IntersectionNode* node)
 
 bool VoronoiPoint::RemoveNode(IntersectionNode* node)
 {
-	std::shared_ptr<IntersectionNode> temp(node);
-	auto position = std::find(neighboringNodes.begin(), neighboringNodes.end(), temp);
+	auto position = std::find(neighboringNodes.begin(), neighboringNodes.end(), node);
 	if (position != neighboringNodes.end())
 	{
 		neighboringNodes.erase(position);
@@ -69,9 +96,14 @@ bool VoronoiPoint::RemoveNode(IntersectionNode* node)
 	return false;
 }
 
-const std::vector<std::shared_ptr<IntersectionNode>>& VoronoiPoint::Get_NeighboringNodes() const
+const std::vector<IntersectionNode*>& VoronoiPoint::Get_NeighboringNodes() const
 {
 	return neighboringNodes;
+}
+
+const int VoronoiPoint::Get_ID() const
+{
+	return id;
 }
 
 const int VoronoiPoint::Get_VoronoiZone() const

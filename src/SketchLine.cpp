@@ -7,11 +7,8 @@ SketchLine::SketchLine(const Vector2D& start, const Vector2D& end)
 	endPos		= end;
 	direction	= (endPos - startPos).Get_Normalized();
 
-	// Making black for now; temporary?
-	rendColor.r = 0;
-	rendColor.g = 0;
-	rendColor.b = 0;
-	rendColor.a = 255;
+	// Making default normal color for now; temporary?
+	Helpers::NormalMapDefaultColor(&rendColor);
 }
 
 SketchLine::~SketchLine()

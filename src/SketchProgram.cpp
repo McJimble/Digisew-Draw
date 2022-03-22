@@ -196,6 +196,7 @@ void SketchProgram::Render()
     {
         line->RenderLine(renderer);
     }*/
+
     if (!sketchLines.empty() && mouseDownLastFrame)
     {
         sketchLines.back()->RenderLine(renderer);
@@ -380,30 +381,42 @@ void SketchProgram::EmplaceVoronoiPoint(SketchLine* editLine)
     int zone = voronoiZonesByPixel[floorPosX][floorPosY];
     std::shared_ptr<VoronoiPoint> newPoint = std::make_shared<VoronoiPoint>(editLine->Get_Origin(), editLine->Get_RenderColor(), zone);
 
+    std::vector<DynamicColor*> pixelsToEvaluate;
+    std::vector<IntersectionNode*> redundantNodes;
     // Pixels must be updated if their min point is overrwritten.
     for (int x = 0; x < screenWidth; x++)
         for (int y = 0; y < screenHeight; y++)
         {
-            if (normalMapColors[x][y]->TryAddMinPoint(newPoint))
+            DynamicColor* it = normalMapColors[x][y].get();
+            if (it->TryAddMinPoint(newPoint))
             {
-                std::shared_ptr<DynamicColor> toUpdate = normalMapColors[x][y];
-                pixelsToUpdate.push_back(std::move(toUpdate));
+                pixelsToEvaluate.push_back(it);
+
+                for (auto& node : createdNodes)
+                {
+                    if ((it->Get_PixelPosition() - node.second->Get_Position()).SqrMagnitude() <= 0.5)
+                    {
+                        redundantNodes.push_back(node.second.get());
+                    }
+                }
             }
+
         }
-    
+
     // Check all pixels surrounding this one; if 3 unique min voronoi points are detected,
     // then we have found an intersection and will create a node.
     // If a pixel goes out of bounds and 2 unique point are detected, then we have an
     // intersection node along the EDGE of the screen.
     // If a pixel goes out of bounds in 2 axes AND 1 unique point is found, then we have a corner.
-    for (auto& pix : pixelsToUpdate)
+    std::vector<IntersectionNode*> newNodes;
+    std::unordered_map<int, VoronoiPoint*> affectedPoints;
+    for (auto& pix : pixelsToEvaluate)
     {
         int pixX = pix->Get_PixelPosition()[0];
         int pixY = pix->Get_PixelPosition()[1];
 
         //std::cout << pix->Get_PixelPosition()[0] << " " << pix->Get_PixelPosition()[1] << "\n";
 
-        // 3 nested loops might seem bad, but they are all relatively small and never exceed 3 iterations.
         int OOBx = 0;   // Determines if we HAVE GONE out of bounds at some point thus far (sign says direction)
         int OOBy = 0;   // Same as above, for y-direction.
         std::vector<VoronoiPoint*> uniquePoints;
@@ -424,8 +437,16 @@ void SketchProgram::EmplaceVoronoiPoint(SketchLine* editLine)
                     averagePos /= (int)uniquePoints.size();
 
                     IntersectionNode* toAdd = new IntersectionNode(averagePos, uniquePoints);
+
+                    // If we already created a point envelopes this area, then don't create redundant node.
+                    if (toAdd == nullptr) break;
+
                     createdNodes.emplace(toAdd->Get_ID(), std::shared_ptr<IntersectionNode>(toAdd));
-                    //newPoint->AddNode(toAdd);
+                    newNodes.push_back(toAdd);
+                    for (auto& pt : uniquePoints)
+                    {
+                        pt->AddNode(toAdd);
+                    }
 
                     x = 2;
                     y = 2;
@@ -435,33 +456,64 @@ void SketchProgram::EmplaceVoronoiPoint(SketchLine* editLine)
                 if (checkY < 0 || checkY >= screenHeight) continue;
                 if (checkX < 0 || checkX >= screenWidth) continue;
 
+                bool contains = false;
+                VoronoiPoint* add = normalMapColors[checkX][checkY]->Get_MinPoint();
+                affectedPoints[add->Get_ID()] = add;
                 for (auto* pt : uniquePoints)
                 {
-                    if (pt == normalMapColors[checkX][checkY]->Get_MinPoint() ||
-                        normalMapColors[checkX][checkY]->Get_MinPoint() == nullptr) continue;
+                    if (pt->Get_ID() == normalMapColors[checkX][checkY]->Get_MinPoint()->Get_ID())
+                    {
+                        contains = true;
+                        break;
+                    }
+                }
 
-                    VoronoiPoint* test = normalMapColors[checkX][checkY]->Get_MinPoint();
+                if (!contains)
+                {
                     averagePos += Vector2D(checkX, checkY);
-                    uniquePoints.push_back(normalMapColors[checkX][checkY]->Get_MinPoint());
-                    break;
+                    uniquePoints.push_back(add);
                 }
             }
         }
     }
+    pixelsToEvaluate.clear();
 
-    // TODO: Before setting new references, remove all references to the nodes that
-    // have now been overwritten by the new point; this happens when a pixel that is
-    // being updated contains a reference to a node.
+    // Yikes...
+    // But we want to update any pixels that have been affected by the change, which
+    // will involve pixels outside of the new voronoi zone.
+    for (auto& pt : affectedPoints)
+    {
+        for (int x = 0; x < screenWidth; x++)
+        {
+            for (int y = 0; y < screenHeight; y++)
+            {
+                if (normalMapColors[x][y]->Get_MinPoint()->Get_ID() == pt.first)
+                {
+                    pixelsToUpdate.push_back(std::shared_ptr<DynamicColor>(normalMapColors[x][y]));
+                }
+            }
+        }
 
-    /*
+        // Remove redundant nodes from voronoi points affected.
+        for (auto& node : redundantNodes)
+        {
+            pt.second->RemoveNode(node);
+        }
+    }
+
+    // Remove redundant nodes from global container (should be last ref. to them, making them delete as well)
+    for (auto& node : redundantNodes)
+    {
+        createdNodes.erase(node->Get_ID());
+    }
+
     // Now that nodes are created, we need each pixel to know what triangle
     // created by the voronoi point and its nodes that it resides in.
-    // IF A FRAME TAKES EXCEEDINGLY LONG WHEN CREATING A POINT, IT IS LIKELY HERE.
-    // The current implementation is a very naive O(n^2) implementation that must do a
-    // point-triangle intersection check each iteration for each pixel.
+    // Checks for point-triangle intersection check each iteration for each pixel.
     for (auto& pix : pixelsToUpdate)
     {
-        auto nodeList = newPoint->Get_NeighboringNodes();
+        auto evalPt = pix->Get_MinPoint();
+        auto nodeList = evalPt->Get_NeighboringNodes();
         bool success = false;
         for (int i = 0; i < nodeList.size(); i++)
         {
@@ -469,21 +521,20 @@ void SketchProgram::EmplaceVoronoiPoint(SketchLine* editLine)
 
             // If true, we found the triangle this pixel resides in. Now compute its relative coordinates
             // and set its required references for rendering.
-            if (Helpers::PointTriangleIntersection(pix->Get_PixelPosition(), newPoint->Get_Position(),
+            if (Helpers::PointTriangleIntersection(pix->Get_PixelPosition(), evalPt->Get_Position(),
                 nodeList[i]->Get_Position(), nodeList[next]->Get_Position()))
             {
-                pix->Set_TriangulationNodes(nodeList[i], nodeList[next], newPoint->Get_Position());
+                pix->Set_TriangulationNodes(nodeList[i], nodeList[next], evalPt->Get_Position());
                 success = true;
                 break;
             }
         }
 
-        if (success) break;
+        if (success) continue;
 
         std::cout << "Error: Pixel not overlapping any triangle at: ";
         std::cout << pix->Get_PixelPosition()[0] << " " << pix->Get_PixelPosition()[1] << "\n";
     }
-    */
     voronoiPoints.push_back(std::move(newPoint));
 
     // With updated pixel info, recreate texture

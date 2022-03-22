@@ -269,19 +269,21 @@ void Helpers::ComputeBarycentricCoordinates(const Vector2D& p, const Vector2D& a
     Vector2D v0 = b - a;
     Vector2D v1 = c - a;
     Vector2D v2 = p - a;
-    float den = 1.0f / (v0[0] * v1[1] - v1[0] * v0[1]);
+    double den = 1.0f / (v0[0] * v1[1] - v1[0] * v0[1]);
     v = (v2[0] * v1[1] - v1[0] * v2[1]) * den;
     w = (v0[0] * v2[1] - v2[0] * v0[1]) * den;
     u = 1.0f - v - w;
 }
 
-bool Helpers::PointTriangleIntersection(const Vector2D& p, const Vector2D& aOrigin, const Vector2D& b, const Vector2D& c)
+bool Helpers::PointTriangleIntersection(const Vector2D& s, const Vector2D& a, const Vector2D& b, const Vector2D& c)
 {
-    Vector2D v1 = b - aOrigin;
-    Vector2D v2 = c - aOrigin;
-    float den = 1.0f / Vector2D::CrossMagnitude(v1, v2);
-    float x = den * ((Vector2D::CrossMagnitude(p, v2) - Vector2D::CrossMagnitude(aOrigin, v2)));
-    float y = den * ((Vector2D::CrossMagnitude(p, v1) - Vector2D::CrossMagnitude(aOrigin, v1)));
+    float u, v, w;
+    Helpers::ComputeBarycentricCoordinates(s, a, b, c, u, v, w);
 
-    return (x > -0.001f && y > -0.001f && x + y < 1.01f);
+    return (u >= -0.02 && v > -0.02 && w >= -0.02);
+}
+
+float Helpers::Clamp(float val, float min, float max)
+{
+    return std::max(min, std::min(val, max));
 }
