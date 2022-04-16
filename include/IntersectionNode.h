@@ -21,7 +21,8 @@ public:
 
 	static int maxPoints;
 
-	IntersectionNode(const Vector2D& setPosition, const std::vector<VoronoiPoint*>& intersectingPoints);
+	IntersectionNode(const Vector2D& setPosition, const std::vector<VoronoiPoint*>& intersectingPoints, int zone);
+	~IntersectionNode();
 
 	// Forces node to update its color based on current values of connected points
 	void UpdateColor();
@@ -30,6 +31,7 @@ public:
 	void RenderNode(SDL_Renderer* rend);
 
 	int Get_ID() const;
+	int Get_VoronoiZone() const;
 	const Vector2D& Get_Position() const;
 	const PixelRGB& Get_AverageColor() const;
 
@@ -43,6 +45,7 @@ private:
 	std::vector<VoronoiPoint*> intersectingPoints;
 
 	int identifier;
+	int voronoiZone;
 	Vector2D position;
 	PixelRGB averageColor;
 };

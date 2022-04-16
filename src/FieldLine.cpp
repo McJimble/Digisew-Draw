@@ -6,6 +6,7 @@ FieldLine::FieldLine(const std::shared_ptr<DynamicColor>& colorToRead, const Vec
 	this->colorToRead	= colorToRead;
 	this->position		= pos;
 	this->length		= length;
+	this->initialLength	= length;
 }
 
 FieldLine::~FieldLine()
@@ -19,6 +20,8 @@ void FieldLine::UpdateLine()
 	if (!colorToRead) return;
 
 	direction = Helpers::HalfNormalColorToDirection(colorToRead->Get_AffectedPixel()->r, colorToRead->Get_AffectedPixel()->g);
+
+	length = (Helpers::InverseLerp(255, 128, colorToRead->Get_AffectedPixel()->b)) * initialLength;
 
 	startPoint = position - (direction * length * 0.5f);
 	endPoint = startPoint + (direction * length);

@@ -28,6 +28,7 @@ private:
 	std::shared_ptr<DynamicColor> colorToRead;
 
 	float length;
+	float initialLength;
 	Vector2D position;
 	Vector2D startPoint;
 	Vector2D endPoint;

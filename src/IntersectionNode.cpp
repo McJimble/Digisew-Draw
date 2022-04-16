@@ -9,12 +9,18 @@
 int IntersectionNode::maxPoints = 3;
 int IntersectionNode::nextID = 0;
 
-IntersectionNode::IntersectionNode(const Vector2D& setPosition, const std::vector<VoronoiPoint*>& intersectingPoints)
+IntersectionNode::IntersectionNode(const Vector2D& setPosition, const std::vector<VoronoiPoint*>& intersectingPoints, int zone)
 {
 	this->position = setPosition;
 	this->identifier = nextID++;
 	this->intersectingPoints = intersectingPoints;
+	this->voronoiZone = zone;
 	UpdateColor();
+}
+
+IntersectionNode::~IntersectionNode()
+{
+	intersectingPoints.clear();
 }
 
 void IntersectionNode::UpdateColor()
@@ -62,6 +68,11 @@ void IntersectionNode::RenderNode(SDL_Renderer* rend)
 int IntersectionNode::Get_ID() const
 {
 	return identifier;
+}
+
+int IntersectionNode::Get_VoronoiZone() const
+{
+	return voronoiZone;
 }
 
 const Vector2D& IntersectionNode::Get_Position() const 

@@ -26,11 +26,6 @@ void DynamicColor::UpdatePixel()
 
     PixelRGB::CopyData((minPt) ? &minPt->Get_NormalEncoding() : &defaultColor, affectedPixel);
 
-    // The closer the distance is to being equidistant to two points, 
-    // the closer the density value is to one.
-    voronoiDensity = (!secondMinPt) ? 0.0f : ( minPtDistance / secondMinPtDistance );
-    voronoiDensity = std::min(1.0f, voronoiDensity);
-
     // Make pixel black if equidistant to second point
     //PixelRGB black = PixelRGB::MakePixel(0, 0, 0);
     //PixelRGB::CopyData((voronoiDensity > edgeThreshold) ? &black : affectedPixel, affectedPixel);
@@ -50,17 +45,11 @@ bool DynamicColor::TryAddMinPoint(const std::shared_ptr<VoronoiPoint>& newPoint)
     float sqrDistNew = (newPoint->Get_Position() - pixPosition).SqrMagnitude();
     if (sqrDistNew < minPtDistance)
     {
-        secondMinPt = (minPt) ? minPt : secondMinPt;
         secondMinPtDistance = minPtDistance;
 
         minPt = newPoint;
         minPtDistance = sqrDistNew;
         return true;
-    }
-    else if (sqrDistNew < secondMinPtDistance)
-    {
-        secondMinPt = newPoint;
-        secondMinPtDistance = sqrDistNew;
     }
 
     return false;
@@ -72,13 +61,17 @@ void DynamicColor::UpdatePixelInterp(const PixelRGB* newColor, float t)
     PixelRGB::CopyData(&interpColor, affectedPixel);
 }
 
+// Deprecated
 void DynamicColor::DensityToLuminosity()
 {
+    /*
     unsigned char val = (unsigned char)(voronoiDensity * 255);
     PixelRGB densityColorVal = PixelRGB::MakePixel(val, val, val);
     PixelRGB::CopyData(&densityColorVal, affectedPixel);
+    */
 }
 
+// Deprecated function
 void DynamicColor::DensityToColor()
 {
     // Old code that just lowered the value on hsv space.
@@ -90,11 +83,13 @@ void DynamicColor::DensityToColor()
     Helpers::HSVtoRGB(h, s, v, affectedPixel);
     */
 
+    /*
     float remapDensity = Helpers::Lerp(0.0f, 0.5f, voronoiDensity);
     Helpers::LerpColor(minPt->Get_NormalEncoding(),
                        (secondMinPt) ? secondMinPt->Get_NormalEncoding() : minPt->Get_NormalEncoding(),
                        remapDensity,
                        affectedPixel);
+                       */
 }
 
 void DynamicColor::BarycentricToColor()
@@ -135,6 +130,11 @@ bool DynamicColor::Set_TriangulationNodes(IntersectionNode* a, IntersectionNode*
 bool DynamicColor::ContainsNode(IntersectionNode* node)
 {
     return (node == triNodeA || node == triNodeB);
+}
+
+int DynamicColor::Get_VoronoiZone()
+{
+    return voronoiZone;
 }
 
 float DynamicColor::Get_VornoiDensity()

@@ -31,6 +31,7 @@ public:
 
 	void Set_VoronoiZone(int zone);	// In case we want to change zone image at runtime.
 	void Set_NormalEncoding(const SDL_Color& normalEncoding);
+	void Set_RenderColor(const SDL_Color& renderColor);
 
 private:
 
@@ -42,6 +43,7 @@ private:
 	int zoneIndex;						// Zone this point is inside of.
 	Vector2D position;					// Position of point on the screen.
 	PixelRGB normalEncoding;			// Normal encoded color provided for this point.
+	SDL_Color renderColor;				// Color of the dot itself
 };
 
 // Comparator for sorting by x position of the point (curretly unused)

@@ -26,9 +26,9 @@
 
 // Fixing window name + dimensions for now to make start code simpler.
 // Can change later if needed.
-#define WINDOW_NAME "Sketch Program Starter"
-#define DEF_SCREEN_WIDTH 1280
-#define DEF_SCREEN_HEIGHT 720
+#define WINDOW_NAME "Digisew-Draw"
+#define DEF_SCREEN_WIDTH 1000
+#define DEF_SCREEN_HEIGHT 1000
 
 /*
  *	Main engine/driver for the sketch program. Handles main functionality such as
@@ -54,6 +54,18 @@ public:
 	 *	Exits program.
 	 */
 	void Quit();
+
+	/*
+	 *	Saves current color map to a file; exludes extra vector fields and vornoi cell edges
+	 *  
+	 *	filename = name of image that will be saved
+	 *  
+	 different filetypes currently supported:
+	 *		bmp
+	 *      png
+	 *		jpg
+	 */
+	void SaveColorMap(std::string& filename);
 
 private:
 
@@ -81,6 +93,13 @@ private:
 
 	bool mouseDownLastFrame = false;	// Was left mouse held down last frame
 	bool isRunning = true;				// Is main program loop currently running?
+	bool debugDisplay = false;			// Displays visuals for extra elements
+	bool enableDeletion = false;		// Can nodes be deleted with mouse instead
+	int deletionRadius = 15;
+	std::shared_ptr<VoronoiPoint> toDelete;
+
+	SDL_Color black = { 0, 0, 0, 255 };
+	SDL_Color white = { 255, 255, 255, 0 };
 
 	void PollEvents();
 	void Update();
@@ -91,7 +110,7 @@ private:
 	 *  in a custom structure we use to determine voronoi zones.
 	 *  Calling will reset and reallocate the voronoi map.
 	 */
-	void ParseZoneMap(const std::string& filename);
+	void ParseZoneMap(const std::string& filename = "");
 
 	/*
 	 *	Allocates a texture to text parameter based on data provided by raw

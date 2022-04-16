@@ -10,6 +10,7 @@ VoronoiPoint::VoronoiPoint(const Vector2D& position, const PixelRGB& normalEncod
 	this->position			= position;
 	this->zoneIndex			= zone;
 	this->id = nextID++;
+	this->renderColor = { 0, 0, 0, 255 };
 }
 
 VoronoiPoint::VoronoiPoint(const Vector2D& position, const SDL_Color& normalEncoding, int zone)
@@ -21,21 +22,17 @@ VoronoiPoint::VoronoiPoint(const Vector2D& position, const SDL_Color& normalEnco
 	this->position	= position;
 	this->zoneIndex = zone;
 	this->id = nextID++;
+	this->renderColor = { 0, 0, 0, 255 };
 }
 
 void VoronoiPoint::RenderPoint(SDL_Renderer* rend)
 {
-	SDL_SetRenderDrawColor(rend, 0, 0, 0, 255);
+	SDL_SetRenderDrawColor(rend, renderColor.r, renderColor.g, renderColor.b, renderColor.a);
 	for (int x = -pixelRadius; x < pixelRadius; x++)
 		for (int y = -pixelRadius; y < pixelRadius; y++)
 		{
 			SDL_RenderDrawPoint(rend, position[0] + x, position[1] + y);
 		}
-
-	for (auto& node : neighboringNodes)
-		node->RenderNode(rend);
-
-	RenderFormedTriangles(rend);
 }
 
 void VoronoiPoint::RenderFormedTriangles(SDL_Renderer* rend)
@@ -137,4 +134,9 @@ void VoronoiPoint::Set_NormalEncoding(const SDL_Color& normalEncoding)
 	{
 		node->UpdateColor();
 	}
+}
+
+void VoronoiPoint::Set_RenderColor(const SDL_Color& renderColor)
+{
+	this->renderColor = renderColor;
 }

@@ -52,6 +52,7 @@ public:
 
 	bool ContainsNode(IntersectionNode* node);
 
+	int Get_VoronoiZone();
 	float Get_VornoiDensity();
 	const PixelRGB* Get_AffectedPixel();
 	const Vector2D& Get_PixelPosition();
@@ -69,7 +70,6 @@ private:
 	float baryU, baryV, baryW;	// Barycentric coordinates used for interpolating color.
 
 	std::shared_ptr<VoronoiPoint> minPt;		// Closest voronoi point to this pixel
-	std::shared_ptr<VoronoiPoint> secondMinPt;	// 2nd closest point to this pixel; used for determining density.
 	float minPtDistance = FLT_MAX;
 	float secondMinPtDistance = FLT_MAX;
 
@@ -83,15 +83,16 @@ private:
 
 	// Reference to RGB pixel this will modify.
 	PixelRGB* affectedPixel;
-
+	 
 	// Position of pixel on screen (float converted)
 	Vector2D pixPosition;
 
+	// DEPRECATED
 	// Changed the affected pixel to a value between black and white
 	// based on the voronoi density.
 	void DensityToLuminosity();
 
-	// OUTDATED
+	// DEPRECATED
 	// Change the affect pixel's value (in hsv space) based on the voronoi
 	// density that is currently applied.
 	void DensityToColor();
