@@ -1,7 +1,8 @@
 #include "FieldLine.h"
 #include "Helpers.h"
 
-FieldLine::FieldLine(const std::shared_ptr<DynamicColor>& colorToRead, const Vector2D& pos, float length)
+#include <iostream>
+FieldLine::FieldLine(DynamicColor* colorToRead, const Vector2D& pos, float length)
 {
 	this->colorToRead	= colorToRead;
 	this->position		= pos;
@@ -19,9 +20,16 @@ void FieldLine::UpdateLine()
 	// Don't update if we have no color to update with.
 	if (!colorToRead) return;
 
-	direction = Helpers::HalfNormalColorToDirection(colorToRead->Get_AffectedPixel()->r, colorToRead->Get_AffectedPixel()->g);
+	const PixelRGB* readThisFrame = colorToRead->Get_AffectedPixel();
+	direction = Helpers::HalfNormalColorToDirection(readThisFrame->r, readThisFrame->g);
+	length = (Helpers::InverseLerp(255, 128, readThisFrame->b)) * initialLength;
 
-	length = (Helpers::InverseLerp(255, 128, colorToRead->Get_AffectedPixel()->b)) * initialLength;
+	if (readThisFrame->r == 128 && readThisFrame->g == 128)
+	{
+		direction = Vector2D(0.0f, 0.0f);
+	}
+
+	Vector2D voronoiPos = colorToRead->Get_MinPoint()->Get_Position();
 
 	startPoint = position - (direction * length * 0.5f);
 	endPoint = startPoint + (direction * length);

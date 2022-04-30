@@ -280,7 +280,7 @@ bool Helpers::PointTriangleIntersection(const Vector2D& s, const Vector2D& a, co
     float u, v, w;
     Helpers::ComputeBarycentricCoordinates(s, a, b, c, u, v, w);
 
-    return (u >= -0.02 && v > -0.02 && w >= -0.02);
+    return (u >= -0.013 && v >= -0.013 && w >= -0.013);
 }
 
 float Helpers::Clamp(float val, float min, float max)

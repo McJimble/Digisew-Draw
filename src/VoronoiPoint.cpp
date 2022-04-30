@@ -54,7 +54,7 @@ void VoronoiPoint::RenderFormedTriangles(SDL_Renderer* rend)
 	SDL_SetRenderDrawColor(rend, oldCol.r, oldCol.g, oldCol.b, oldCol.a);
 }
 
-void VoronoiPoint::AddNode(IntersectionNode* node)
+void VoronoiPoint::AddNode(const std::shared_ptr<IntersectionNode>& node)
 {
 	if (neighboringNodes.empty())
 	{
@@ -82,18 +82,35 @@ void VoronoiPoint::AddNode(IntersectionNode* node)
 	}
 }
 
-bool VoronoiPoint::RemoveNode(IntersectionNode* node)
+bool VoronoiPoint::RemoveNode(int nodeID)
 {
-	auto position = std::find(neighboringNodes.begin(), neighboringNodes.end(), node);
+	for (int i = 0; i < neighboringNodes.size(); i++)
+	{
+		if (neighboringNodes[i]->Get_ID() == nodeID)
+		{
+			neighboringNodes.erase(neighboringNodes.begin() + i);
+			return true;
+		}
+	}
+	return false;
+
+	/*
+	auto position = std::find(neighboringNodes.begin(), neighboringNodes.end(), nodeID);
 	if (position != neighboringNodes.end())
 	{
 		neighboringNodes.erase(position);
 		return true;
 	}
 	return false;
+	*/
 }
 
-const std::vector<IntersectionNode*>& VoronoiPoint::Get_NeighboringNodes() const
+void VoronoiPoint::ClearNodes()
+{
+	neighboringNodes.clear();
+}
+
+const std::vector<std::shared_ptr<IntersectionNode>>& VoronoiPoint::Get_NeighboringNodes() const
 {
 	return neighboringNodes;
 }
@@ -139,4 +156,9 @@ void VoronoiPoint::Set_NormalEncoding(const SDL_Color& normalEncoding)
 void VoronoiPoint::Set_RenderColor(const SDL_Color& renderColor)
 {
 	this->renderColor = renderColor;
+}
+
+void VoronoiPoint::Set_Position(const Vector2D& newPos)
+{
+	this->position = newPos;
 }

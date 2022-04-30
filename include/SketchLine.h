@@ -18,9 +18,10 @@ public:
 	~SketchLine();
 	
 	void RenderLine(SDL_Renderer* rend);	
+	void UpdateColor();
 	void SetStartPoint(const Vector2D& start);
 	void SetEndPoint(const Vector2D& end);
-	//void ColorEncompassedPixels(DynamicColor**& screenColorsArray);
+	void SetColorMode(bool enableBlue);
 
 	float Get_Magnitude();			// Length of line.
 	Vector2D Get_Origin();			// Origin point, probably where mouse was initially clicked.
@@ -30,6 +31,14 @@ public:
 	SDL_Color Get_RenderColor();	// Current render color based on direction.
 
 private:
+
+	static int maxBlueDist;
+	static int maxBlueDistSqr;
+	static int defaultColorDist;
+	static int defaultColorDistSqr;
+
+	bool blueSetMode = false;
+	Uint8 restoreR, restoreG;
 
 	// Represents line direction and position in screen space.
 	Vector2D startPos;
@@ -42,6 +51,8 @@ private:
 	// Render color that will be based on direction normal.
 	SDL_Color rendColor;
 
+	SDL_Rect startPosRect;
+	SDL_Rect maxRadiusRect;
 	// Positions of pixels surrounding the line. Uses the same radius
 	// as the line itself right now (half its magnitude)
 	//std::vector<DynamicColor*> encompassedPixels;

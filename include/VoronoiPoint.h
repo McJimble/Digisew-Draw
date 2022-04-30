@@ -20,10 +20,11 @@ public:
 	void RenderPoint(SDL_Renderer* rend);
 	void RenderFormedTriangles(SDL_Renderer* rend);
 
-	void AddNode(IntersectionNode* node);
-	bool RemoveNode(IntersectionNode* node);
+	void AddNode(const std::shared_ptr<IntersectionNode>& node);
+	bool RemoveNode(int nodeID);
+	void ClearNodes();
 
-	const std::vector<IntersectionNode*>& Get_NeighboringNodes() const;
+	const std::vector<std::shared_ptr<IntersectionNode>>& Get_NeighboringNodes() const;
 	const int Get_ID() const;
 	const int Get_VoronoiZone() const;
 	const Vector2D& Get_Position() const;
@@ -32,12 +33,13 @@ public:
 	void Set_VoronoiZone(int zone);	// In case we want to change zone image at runtime.
 	void Set_NormalEncoding(const SDL_Color& normalEncoding);
 	void Set_RenderColor(const SDL_Color& renderColor);
+	void Set_Position(const Vector2D& newPos);
 
 private:
 
 	static int nextID;
 
-	std::vector<IntersectionNode*> neighboringNodes;
+	std::vector<std::shared_ptr<IntersectionNode>> neighboringNodes;
 
 	int id;								// ID of this object given at creation.
 	int zoneIndex;						// Zone this point is inside of.

@@ -63,7 +63,7 @@ public:
 	 different filetypes currently supported:
 	 *		bmp
 	 *      png
-	 *		jpg
+	 *		jpg (SDL_Image.h must be properly linked libjpeg, which is weird to configure)
 	 */
 	void SaveColorMap(std::string& filename);
 
@@ -76,27 +76,38 @@ private:
 
 	PixelRGB** normalMapPixels;													// Actual pixels displayed on texture.
 	SDL_Texture* normalMapTexture;												// Texture being displayed/changed in background.
+	std::vector<std::vector<DynamicColor*>> normalMapColors;					// Colors being sent by normal map sketches
+	std::vector<DynamicColor*> pixelsToUpdate;									// Pixels that will be updated this frame.
+	// ^ The above vars. live for the entire program and are referenced a lot, so I opted to make them raw pointers for performance 
+	// (sorry modern C++ guys, the automatic memory management libraries are dogshit for speed when ownership is shared)
+	
 	std::unordered_map<int, std::shared_ptr<IntersectionNode>> createdNodes;	// Intersection nodees that have been created thus far (where edges connect)
 	std::vector<std::vector<int>> voronoiZonesByPixel;							// Voronoi zone for each pixel on screen.
-	std::vector<std::vector<std::shared_ptr<DynamicColor>>> normalMapColors;	// Colors being sent by normal map sketches
-	std::vector<std::shared_ptr<DynamicColor>> pixelsToUpdate;					// Pixels that will be updated this frame.
 	std::vector<std::shared_ptr<SketchLine>> sketchLines;						// Lines drawn by the user; not normally shown but are stored for debugging.
 
-	// Voronoi points that have been placed. This link suggests sorting them by x-distance
+	// All voronoi points that have been placed. This link suggests sorting them by x-distance
 	// if needed to iterate through them, so that may be added later.
 	// https://www.codeproject.com/Articles/882739/Simple-Approach-to-Voronoi-Diagrams
-	std::vector<std::shared_ptr<VoronoiPoint>> voronoiPoints;					// All voronoi points created by the user.
+	std::unordered_map<int, std::shared_ptr<VoronoiPoint>> voronoiPoints;					// All voronoi points created by the user.
+	int newestPointID;
 
-	std::shared_ptr<VectorField> mainVecField;
+	std::unique_ptr<VectorField> mainVecField;
 	int fieldX, fieldY;
 	int fieldPadding;
 
-	bool mouseDownLastFrame = false;	// Was left mouse held down last frame
-	bool isRunning = true;				// Is main program loop currently running?
-	bool debugDisplay = false;			// Displays visuals for extra elements
-	bool enableDeletion = false;		// Can nodes be deleted with mouse instead
-	int deletionRadius = 15;
-	std::shared_ptr<VoronoiPoint> toDelete;
+	bool isRunning = true;					// Is main program loop currently running?
+	bool leftMouseDownLastFrame = false;	// Was left mouse held down last frame
+	bool rightMouseDownLastFrame = false;	// Was right mouse held down last frame
+	bool middleMouseDownLastFrame = false;	// Was middle mouse held down last frame
+	bool debugDisplay = false;				// Displays visuals for extra elements
+	bool enableDeletion = false;			// Can nodes be deleted with mouse instead
+	bool enablePersistentSelection = false;	// When true, selected points are not removed from list if not selected.
+	bool pointPositionsDirty = false;		// Have point positions been moved and should therefore refresh the map?
+	Vector2D mousePos;						// Cached position of mouse in screen space.
+	Vector2D prevMousePos;					// Mouse position of previous frame; used to displace things with mouse movement.
+	SDL_Rect selectRect;
+	std::unordered_map<int, std::shared_ptr<VoronoiPoint>> selectedPoints;	// Box-selected points using right click
+	Vector2D initSelectionPoint = Vector2D(-1.0f, -1.0f);					// Place where right mouse was first clicked to select.
 
 	SDL_Color black = { 0, 0, 0, 255 };
 	SDL_Color white = { 255, 255, 255, 0 };
@@ -111,6 +122,11 @@ private:
 	 *  Calling will reset and reallocate the voronoi map.
 	 */
 	void ParseZoneMap(const std::string& filename = "");
+
+	/*
+	 *	Creates a default mesh containing 10 rows and columns of evently spaced voronoiPoints.
+	 */
+	void LoadDefaultMesh();
 
 	/*
 	 *	Allocates a texture to text parameter based on data provided by raw
@@ -128,7 +144,53 @@ private:
 	/*
 	 *	Places a new voronoi point and updates the displayed map
 	 */
-	void EmplaceVoronoiPoint(SketchLine* editline);
+	void EmplaceVoronoiPoint(std::shared_ptr<VoronoiPoint>& editline, bool updateAffectedBarycentric = true);
+
+	/*
+	 *	Does the SDL_Rect overlap this point?
+	 */
+	bool PointRectOverlap(const SDL_Rect& aabb, const Vector2D& pt);
+
+	/*
+	 *	Draw line, emplace point when mouse down
+	 *	
+	 *	placePoint: will the sketch line's creation also place a voronoi map simultaneously.
+	 *	
+	 *	returns: reference to the sketch line that was either newly created OR
+	 *  is currently being editted because of current state of the program.
+	 */
+	SketchLine* DrawSketchLine(bool placePoint);
+
+	/*
+	 *	Moves selected points with left mouse movement; recompute map on left mouse up.
+	 */
+	void MoveSelectedPoints();
+
+	/*
+	 *	Controls logic of recoloring all points currently selected and updating pixels
+	 *
+	 *	followLine: Sketch line to color pixels of
+	 */
+	void RecolorSelectedPoints(SketchLine* followLine);
+
+	/*
+	 *  Updates barycentric coordinates and coloring for a list of pixels
+	 */
+	void BarycentricUpdate(const std::vector<DynamicColor*>& toUpdate);
+
+	void CheckForIntersections(const std::vector<DynamicColor*>& toCheck);
+
+	/*
+	 *	Generates the entire map based on current voronoi points that already have
+	 *	vertices/nodes determined. No optmization at all, just n^3 implementation that checks
+	 *  possible points with each pixel.
+	 */
+	void RebuildMapNaive();
+
+	/*
+	 *	Deletes all nodes currently selected, if any. 
+	 */
+	void DeleteSelectedPoints();
 
 	int Get_ScreenHeight();
 	int Get_ScreenWidth();

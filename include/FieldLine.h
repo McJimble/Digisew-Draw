@@ -14,7 +14,7 @@ class FieldLine
 {
 public:
 
-	FieldLine(const std::shared_ptr<DynamicColor>& colorToRead, const Vector2D& pos, float length = 5.0f);
+	FieldLine(DynamicColor* colorToRead, const Vector2D& pos, float length = 5.0f);
 	~FieldLine();
 
 	// Recalculates render positions and direction when told.
@@ -25,7 +25,7 @@ public:
 
 private:
 
-	std::shared_ptr<DynamicColor> colorToRead;
+	DynamicColor* colorToRead;
 
 	float length;
 	float initialLength;

@@ -114,13 +114,13 @@ void DynamicColor::SetVoronoiZone(int newZoneID)
     this->voronoiZone = newZoneID;
 }
 
-bool DynamicColor::Set_TriangulationNodes(IntersectionNode* a, IntersectionNode* b, const Vector2D& origin)
+bool DynamicColor::Set_TriangulationNodes(const std::shared_ptr<IntersectionNode>& a, const std::shared_ptr<IntersectionNode>& b, const Vector2D& origin)
 {
     Helpers::ComputeBarycentricCoordinates(pixPosition, origin, a->Get_Position(), b->Get_Position(),
         baryU, baryV, baryW);
 
-    triNodeA = a;
-    triNodeB = b;
+    triNodeA = std::shared_ptr<IntersectionNode>(a);
+    triNodeB = std::shared_ptr<IntersectionNode>(b);
     baryU = Helpers::Clamp(baryU, 0.0f, 1.0f);
     baryV = Helpers::Clamp(baryV, 0.0f, 1.0f);
     baryW = Helpers::Clamp(baryW, 0.0f, 1.0f);
@@ -129,7 +129,19 @@ bool DynamicColor::Set_TriangulationNodes(IntersectionNode* a, IntersectionNode*
 
 bool DynamicColor::ContainsNode(IntersectionNode* node)
 {
-    return (node == triNodeA || node == triNodeB);
+    return (node->Get_ID() == triNodeA->Get_ID() || node->Get_ID() == triNodeB->Get_ID());
+}
+
+void DynamicColor::ClearVoronoiData()
+{
+    triNodeA.reset();
+    triNodeB.reset();
+    minPt.reset();
+    minPtDistance = FLT_MAX;
+    baryU = 0;
+    baryV = 0;
+    baryW = 0;
+    Helpers::NormalMapDefaultColor(affectedPixel);
 }
 
 int DynamicColor::Get_VoronoiZone()
@@ -142,17 +154,27 @@ float DynamicColor::Get_VornoiDensity()
     return voronoiDensity;
 }
 
-const PixelRGB* DynamicColor::Get_AffectedPixel()
+const PixelRGB* DynamicColor::Get_AffectedPixel() const
 {
     return affectedPixel;
 }
 
-const Vector2D& DynamicColor::Get_PixelPosition()
+const Vector2D& DynamicColor::Get_PixelPosition() const
 {
     return pixPosition;
 }
 
-VoronoiPoint* DynamicColor::Get_MinPoint()
+VoronoiPoint* DynamicColor::Get_MinPoint() const
 {
     return minPt.get();
+}
+
+IntersectionNode* DynamicColor::Get_TriNodeA() const
+{
+    return triNodeA.get();
+}
+
+IntersectionNode* DynamicColor::Get_TriNodeB() const
+{
+    return triNodeB.get();
 }

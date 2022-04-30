@@ -85,6 +85,11 @@ const PixelRGB& IntersectionNode::Get_AverageColor() const
 	return averageColor;
 }
 
+const std::vector<VoronoiPoint*>& IntersectionNode::Get_IntersectingPoints() const
+{
+	return intersectingPoints;
+}
+
 bool IntersectionNode::EnvelopesSamePoints(const IntersectionNode& other) const
 {
 	if (other.intersectingPoints.size() != this->intersectingPoints.size()) return false;

@@ -48,15 +48,19 @@ public:
 	/*
 	 *	Returns true if conditions were met that allowed these to all be set. 
 	 */
-	bool Set_TriangulationNodes(IntersectionNode* a, IntersectionNode* b, const Vector2D& origin);
+	bool Set_TriangulationNodes(const std::shared_ptr<IntersectionNode>& a, const std::shared_ptr<IntersectionNode>& b, const Vector2D& origin);
 
 	bool ContainsNode(IntersectionNode* node);
 
+	void ClearVoronoiData();
+
 	int Get_VoronoiZone();
 	float Get_VornoiDensity();
-	const PixelRGB* Get_AffectedPixel();
-	const Vector2D& Get_PixelPosition();
-	VoronoiPoint* Get_MinPoint();
+	const PixelRGB* Get_AffectedPixel() const;
+	const Vector2D& Get_PixelPosition() const;
+	VoronoiPoint* Get_MinPoint() const;
+	IntersectionNode* Get_TriNodeA() const;
+	IntersectionNode* Get_TriNodeB() const;
 	
 private:
 
@@ -65,8 +69,8 @@ private:
 	static float edgeThreshold;
 
 	// 2 intersection nodes that form triangle it's within.
-	IntersectionNode* triNodeA;
-	IntersectionNode* triNodeB;
+	std::shared_ptr<IntersectionNode> triNodeA;
+	std::shared_ptr<IntersectionNode> triNodeB;
 	float baryU, baryV, baryW;	// Barycentric coordinates used for interpolating color.
 
 	std::shared_ptr<VoronoiPoint> minPt;		// Closest voronoi point to this pixel

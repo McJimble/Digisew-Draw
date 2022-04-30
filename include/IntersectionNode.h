@@ -34,6 +34,7 @@ public:
 	int Get_VoronoiZone() const;
 	const Vector2D& Get_Position() const;
 	const PixelRGB& Get_AverageColor() const;
+	const std::vector<VoronoiPoint*>& Get_IntersectingPoints() const;
 
 	bool EnvelopesSamePoints(const IntersectionNode& other) const;
 

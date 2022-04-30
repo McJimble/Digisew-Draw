@@ -30,23 +30,31 @@ void SketchProgram::Initialize()
     screenWidth = DEF_SCREEN_WIDTH;
 
     // Parse with default texture for now
-    // (TODO: get image via command line or other method)
     std::string filename;
-    std::string useDefault;
-    std::cout << "Would you like to use a custom zone image? (Y/N)" << std::endl;
-    std::cin >> useDefault;
-    if (useDefault == "Y" || useDefault == "y")
+    std::string userInput;
+    std::cout << "Would you like to use a custom zone image? (Y/N)\n";
+    std::cin >> userInput;
+    if (userInput == "Y" || userInput == "y")
     {
-        std::cout << "Enter file name for region image:" << std::endl;
+        std::cout << "Enter file name for region image:\n";
         std::cin >> filename;
     }
     ParseZoneMap(filename);
 
+    std::cout << "Start with an empty canvas? (Y/N)\n";
+    std::cin >> userInput;
+
+    if (userInput == "N" || userInput == "n")
+    {
+        std::cout << "Loading default mesh...\n";
+        LoadDefaultMesh();
+    }
+
     // Arbitrary default values.
     fieldX = 32;
     fieldY = 18;
-    fieldPadding = 30;
-    mainVecField = std::make_shared<VectorField>(fieldX, fieldY, fieldPadding, SDL_Color {0, 0, 0, 255});
+    fieldPadding = 15;
+    mainVecField = std::make_unique<VectorField>(fieldX, fieldY, fieldPadding, SDL_Color {0, 0, 0, 255});
     mainVecField->InitializeVectors(normalMapColors, 20);
 
     // Create window and renderer
@@ -59,6 +67,8 @@ void SketchProgram::Initialize()
     renderer = SDL_CreateRenderer(window, -1, 0);
 
     CreateTextureFromPixelData(normalMapTexture, normalMapPixels[0], screenWidth, screenHeight, 3);
+
+    std::cout << "Ready to draw!\n";
 }
 
 void SketchProgram::MainLoop()
@@ -126,20 +136,15 @@ void SketchProgram::PollEvents()
                 std::string filename;
                 std::string fileExtension;
 
-                std::cout << "Save color map file as (only .bmp and .png are supported): ";
+                std::cout << "Save color map file as (supports .png, .bmp, .jpg): ";
                 std::cin >> filename;
 
                 SaveColorMap(filename);
             }
-        }
-        if (event.type == SDL_KEYUP)
-        {
-            if (event.key.keysym.sym == SDLK_e)
+
+            if (event.key.keysym.sym == SDLK_DELETE)
             {
-                if (toDelete)
-                {
-                    //Delete node code goes here.
-                }
+                DeleteSelectedPoints();
             }
         }
     }
@@ -149,94 +154,87 @@ void SketchProgram::Update()
 {
     const Uint8* keys = SDL_GetKeyboardState(NULL);
     enableDeletion = keys[SDL_SCANCODE_E];
+    enablePersistentSelection = keys[SDL_SCANCODE_LSHIFT];
 
-    // Get mouse state, as well as check for left mouse click.
+    // Get mouse state, as well as check for mouse buttons being held at the current frame.
     // When click is held, edits most recently added line in our list of them.
     // If click was just pressed, adds a new line to our list.
     int mouseX, mouseY;
+    bool leftMouseHeld = (SDL_GetMouseState(&mouseX, &mouseY) & SDL_BUTTON(1)) != 0;
+    bool middleMouseHeld = (SDL_GetMouseState(&mouseX, &mouseY) & SDL_BUTTON(2)) != 0;
+    bool rightMouseHeld = (SDL_GetMouseState(&mouseX, &mouseY) & SDL_BUTTON(3)) != 0;
+    prevMousePos = mousePos;
+    mousePos = Vector2D(mouseX, mouseY);
 
-    SketchLine* editLine = (sketchLines.empty()) ? nullptr : sketchLines.back().get();
-    if ((SDL_GetMouseState(&mouseX, &mouseY) & SDL_BUTTON(1)) != 0)
+    if (middleMouseDownLastFrame || pointPositionsDirty)
     {
-        Vector2D mousePos = Vector2D(mouseX, mouseY);
-        // If mouse was just clicked, create new line at mouse position.
-        if (!mouseDownLastFrame)
-        {
-            editLine = new SketchLine(mousePos, mousePos);
-            sketchLines.push_back(std::shared_ptr<SketchLine>(editLine));
+        MoveSelectedPoints();
+    }
+    else if (rightMouseHeld)
+    {
+        // Cancel prev. left mouse actions if right mouse clicked;
+        if (leftMouseDownLastFrame)
+            pixelsToUpdate.clear();
+        
+        if (!rightMouseDownLastFrame)
+            initSelectionPoint = mousePos;
 
-            EmplaceVoronoiPoint(editLine);
+        selectRect.w = std::abs(initSelectionPoint[0] - mousePos[0]);
+        selectRect.h = std::abs(initSelectionPoint[1] - mousePos[1]);
+
+        selectRect.x = (initSelectionPoint[0] < mousePos[0]) ? initSelectionPoint[0] : mousePos[0];
+        selectRect.y = (initSelectionPoint[1] < mousePos[1]) ? initSelectionPoint[1] : mousePos[1];
+
+        // Refreshes the selectedPoint map, removing points not overlapped and
+        // adding ones that are. There's probably a better way of doing this, though.
+        for (auto& pt : voronoiPoints)
+        {
+            const std::shared_ptr<VoronoiPoint>& vPt = pt.second;
+            if (PointRectOverlap(selectRect, vPt->Get_Position()))
+            {
+                vPt->Set_RenderColor(white);
+                selectedPoints[vPt->Get_ID()] = std::shared_ptr<VoronoiPoint>(vPt);
+            }
+            else if (!enablePersistentSelection)
+            {
+                vPt->Set_RenderColor(black);
+                selectedPoints.erase(vPt->Get_ID());
+            }
         }
 
-        editLine->SetEndPoint(mousePos);
-
-        // Set normal encoding of vornoi point based on angle of line
-        // drawn. If space is held, override that and use default normal color.
-        SDL_Color normalColor = editLine->Get_RenderColor();
-        const Uint8* keys = SDL_GetKeyboardState(NULL);
-        if (keys[SDL_SCANCODE_SPACE])
-        {
-            Helpers::NormalMapDefaultColor(&normalColor);
-        }
-
-        voronoiPoints.back()->Set_NormalEncoding(normalColor);
-
-        mainVecField->UpdateAll();
-
-        mouseDownLastFrame = true;
     }
     else
     {
-        // If mouse click was removed, tell line to calculate what pixels it covers.
-        if (mouseDownLastFrame)
+        selectRect.w = selectRect.h = 0;
+        selectRect.x = selectRect.y = -1000;
+
+        if (leftMouseHeld)
+        {
+            if (selectedPoints.empty())
+            {
+                DrawSketchLine(true);
+            }
+            else
+            {
+                RecolorSelectedPoints(DrawSketchLine(false));
+            }
+
+            // Update all pixels that are set to be updated this frame (typically because
+            // they are being editted by a newly placed VoronoiPoint)
+            for (auto& pix : pixelsToUpdate)
+            {
+                pix->UpdatePixel();
+            }
+        }
+        else
         {
             pixelsToUpdate.clear();
         }
-        mouseDownLastFrame = false;
-
-        if (enableDeletion)
-        {
-            Vector2D mousePos(mouseX, mouseY);
-            bool found = (toDelete.get() != nullptr);
-            float minDist = (found) ? (mousePos - toDelete->Get_Position()).SqrMagnitude() : FLT_MAX;
-            for (auto& pt : voronoiPoints)
-            {
-                float distToMouse = (mousePos - pt->Get_Position()).SqrMagnitude();
-                if (distToMouse < minDist && distToMouse < deletionRadius * deletionRadius)
-                {
-                    found = true;
-
-                    minDist = distToMouse;
-                    if (toDelete)
-                        toDelete->Set_RenderColor(black);
-                    toDelete = pt;
-                    toDelete->Set_RenderColor(white);
-                }
-            }
-
-            if (!found) 
-                toDelete.reset();
-        }
-        else if (toDelete)
-        {
-            toDelete->Set_RenderColor(black);
-            toDelete.reset();
-        }
     }
 
-    // Update all pixels that are set to be updated this frame (typically because
-    // they are being editted by a newly placed VoronoiPoint)
-    for (auto& pix : pixelsToUpdate)
-    {
-        pix->UpdatePixel();
-    }
-
-    // This loop + texture update will update every pixel every frame, use w/ caution
-    /*for (int x = 0; x < screenWidth; x++)
-        for (int y = 0; y < screenHeight; y++)
-        {
-            normalMapColors[x][y]->UpdatePixel();
-        }*/
+    leftMouseDownLastFrame = leftMouseHeld;
+    middleMouseDownLastFrame = middleMouseHeld;
+    rightMouseDownLastFrame = rightMouseHeld;
 
     SDL_DestroyTexture(normalMapTexture);
     CreateTextureFromPixelData(normalMapTexture, normalMapPixels[0], screenWidth, screenHeight, 3);
@@ -247,12 +245,7 @@ void SketchProgram::Render()
     // Currently, background texture is same size as window which cannot be resized.
     SDL_RenderCopy(renderer, normalMapTexture, NULL, NULL);
 
-    /*for (auto& line : sketchLines)
-    {
-        line->RenderLine(renderer);
-    }*/
-
-    if (!sketchLines.empty() && mouseDownLastFrame)
+    if (!sketchLines.empty() && leftMouseDownLastFrame)
     {
         sketchLines.back()->RenderLine(renderer);
     }
@@ -261,14 +254,14 @@ void SketchProgram::Render()
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     for (auto& pt : voronoiPoints)
     {
-        pt->RenderPoint(renderer);
+        pt.second->RenderPoint(renderer);
     }
 
     if (debugDisplay)
     {
         for (auto& pt : voronoiPoints)
         {
-            pt->RenderFormedTriangles(renderer);
+            pt.second->RenderFormedTriangles(renderer);
         }
 
         for (auto& node : createdNodes)
@@ -276,22 +269,16 @@ void SketchProgram::Render()
             node.second->RenderNode(renderer);
         }
     }
-    if (enableDeletion)
-    {
-        int x, y;
-        SDL_Rect rendRect;
-        
-        SDL_GetMouseState(&x, &y);
-        rendRect.w = rendRect.h = deletionRadius;
-        rendRect.x = x - deletionRadius / 2;
-        rendRect.y = y - deletionRadius / 2;
 
+    mainVecField->Render(renderer);
+
+    if (rightMouseDownLastFrame)
+    {
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        SDL_RenderDrawRect(renderer, &rendRect);
+        SDL_RenderDrawRect(renderer, &selectRect);
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     }
 
-    mainVecField->Render(renderer);
 
     SDL_RenderPresent(renderer);
 }
@@ -335,7 +322,7 @@ void SketchProgram::SaveColorMap(std::string& filename)
     else if (fileExtension == ".png")
         errCheck = IMG_SavePNG(pixelsToSurf, filename.c_str());
     else if (fileExtension == ".jpg")
-        errCheck = IMG_SaveJPG(pixelsToSurf, filename.c_str(), 95);
+        errCheck = IMG_SaveJPG(pixelsToSurf, filename.c_str(), 95); // may not work if sdl_image not built with libjpeg
     else
     {
         std::cout << fileExtension << " is not supported. Aborting save.\n";
@@ -361,7 +348,12 @@ void SketchProgram::ParseZoneMap(const std::string& filename)
         height = DEF_SCREEN_HEIGHT;
         bytes = 3;
 
-        pixels = new unsigned char[bytes * width * height];
+        long totalLen = bytes * width * height;
+        pixels = new unsigned char[totalLen];
+        for (long i = 0; i < totalLen; i++)
+        {
+            pixels[i] = 0;
+        }
     }
     else
     {
@@ -380,13 +372,13 @@ void SketchProgram::ParseZoneMap(const std::string& filename)
     normalMapColors.resize(screenWidth);
     for (int x = 0; x < screenWidth; x++)
     {
-        std::vector<std::shared_ptr<DynamicColor>> temp;
+        std::vector<DynamicColor*> temp;
         temp.reserve(screenHeight);
         voronoiZonesByPixel.reserve(screenHeight);
         for (int y = 0; y < screenHeight; y++)
         {
             DynamicColor* newCol = new DynamicColor(&normalMapPixels[y][x], Vector2D(x, y));
-            temp.push_back(std::shared_ptr<DynamicColor>(newCol));
+            temp.push_back(newCol);
         }
         normalMapColors[x].insert(normalMapColors[x].end(), temp.begin(), temp.end());
     }
@@ -406,23 +398,24 @@ void SketchProgram::ParseZoneMap(const std::string& filename)
             currPixel->g = static_cast<unsigned char>(pixels[index + 1]);
             currPixel->b = static_cast<unsigned char>(pixels[index + 2]);
 
-            bool isNewColor = false;
+            bool isNewColor = true;
             for (int i = 0; i < uniqueColors.size(); i++)
             {
                 if (PixelRGB::Equals(currPixel, uniqueColors[i]))
                 {
-                    isNewColor = true;
+                    isNewColor = false;
                     normalMapColors[x][y]->SetVoronoiZone(i);
                     voronoiZonesByPixel[x][y] = i;
                     break;
                 }
             }
 
-            if (!isNewColor)
+            if (isNewColor)
             {
                 uniqueColors.push_back(currPixel);
                 normalMapColors[x][y]->SetVoronoiZone((int)uniqueColors.size() - 1);
                 voronoiZonesByPixel[x][y] = (int)uniqueColors.size() - 1;
+                std::cout << "Test\n";
             }
             else
                 delete currPixel;
@@ -432,6 +425,52 @@ void SketchProgram::ParseZoneMap(const std::string& filename)
     pixelsToUpdate.clear();
     pixelsToUpdate.reserve(normalMapColors.size() * normalMapColors[0].size());
     voronoiPoints.clear();
+}
+
+void SketchProgram::LoadDefaultMesh()
+{
+    int padding = screenWidth * 0.05;
+    int maxX = screenWidth - padding - padding;
+    int maxY = screenHeight - padding - padding;
+
+    int sizeX = 10;
+    int sizeY = 10;
+
+    // Place points with padding and even spacing w/ same strategy as the VectorField creation
+    for (int x = 0; x < sizeX; x++)
+        for (int y = 0; y < sizeY; y++)
+        {
+            std::cout << "Spawning Point: x = " << x << ", y = " << y << "\n";
+            float interpX = (float)x / (sizeX - 1);
+            float interpY = (float)y / (sizeY - 1);
+            Vector2D pos = Vector2D((interpX * maxX) + padding, (interpY * maxY) + padding);
+
+            int pixX = (int)pos[0];
+            int pixY = (int)pos[1];
+
+            SDL_Color defCol;
+            /*defCol.r = (Uint8)Helpers::Lerp(0, 255, interpX);
+            defCol.g = (Uint8)Helpers::Lerp(0, 255, interpY);
+            defCol.b = 128;
+            defCol.a = 255;*/
+
+            Helpers::NormalMapDefaultColor(&defCol);
+            int zone = voronoiZonesByPixel[pixY][pixX];
+            std::shared_ptr<VoronoiPoint> newPoint = std::make_shared<VoronoiPoint>(pos, defCol, zone);
+            EmplaceVoronoiPoint(newPoint, false);
+            newestPointID = newPoint->Get_ID();
+            voronoiPoints[newestPointID] = std::move(newPoint);
+        }
+
+    for (int x = 0; x < screenWidth; x++)
+    {
+        BarycentricUpdate(normalMapColors[x]);
+        for (int y = 0; y < screenHeight; y++)
+        {
+            normalMapColors[x][y]->UpdatePixel();
+        }
+    }
+
 }
 
 void SketchProgram::CreateTextureFromPixelData(SDL_Texture*& text, void* pixels, int w, int h, int channels)
@@ -506,22 +545,22 @@ void SketchProgram::EmplaceSketchLine(SketchLine* editLine)
     CreateTextureFromPixelData(normalMapTexture, normalMapPixels[0], screenWidth, screenHeight, 3);
 }
 
-void SketchProgram::EmplaceVoronoiPoint(SketchLine* editLine)
+void SketchProgram::EmplaceVoronoiPoint(std::shared_ptr<VoronoiPoint>& newPoint, bool updateAffectedBarycentric)
 {
-    int floorPosX = editLine->Get_Origin()[0];
-    int floorPosY = editLine->Get_Origin()[1];
-    int zone = voronoiZonesByPixel[floorPosX][floorPosY];
-    std::shared_ptr<VoronoiPoint> newPoint = std::make_shared<VoronoiPoint>(editLine->Get_Origin(), editLine->Get_RenderColor(), zone);
+    int floorPosX = newPoint->Get_Position()[0];
+    int floorPosY = newPoint->Get_Position()[1];
+    int zone = newPoint->Get_VoronoiZone();
 
     std::vector<DynamicColor*> pixelsToEvaluate;
-    std::vector<IntersectionNode*> redundantNodes;
+    std::vector<int> redundantNodes;
+
     // Pixels must be updated if their min point is overrwritten.
     for (int x = 0; x < screenWidth; x++)
         for (int y = 0; y < screenHeight; y++)
         {
             if (zone != voronoiZonesByPixel[x][y]) continue;
 
-            DynamicColor* it = normalMapColors[x][y].get();
+            DynamicColor* it = normalMapColors[x][y];
             if (it->TryAddMinPoint(newPoint))
             {
                 pixelsToEvaluate.push_back(it);
@@ -530,7 +569,7 @@ void SketchProgram::EmplaceVoronoiPoint(SketchLine* editLine)
                 {
                     if ((it->Get_PixelPosition() - node.second->Get_Position()).SqrMagnitude() <= 0.5)
                     {
-                        redundantNodes.push_back(node.second.get());
+                        redundantNodes.push_back(node.first);
                     }
                 }
             }
@@ -542,7 +581,6 @@ void SketchProgram::EmplaceVoronoiPoint(SketchLine* editLine)
     // If a pixel goes out of bounds and 2 unique point are detected, then we have an
     // intersection node along the EDGE of the screen.
     // If a pixel goes out of bounds in 2 axes AND 1 unique point is found, then we have a corner.
-    std::vector<IntersectionNode*> newNodes;
     std::unordered_map<int, VoronoiPoint*> affectedPoints;
     for (auto& pix : pixelsToEvaluate)
     {
@@ -565,27 +603,6 @@ void SketchProgram::EmplaceVoronoiPoint(SketchLine* editLine)
             {
                 int checkY = pixY + y;
                 OOBy = (OOBy == 0) ? ((checkY < 0) ? -1 : (checkY >= screenHeight) ? 1 : 0) : OOBy;
-                
-                if (uniquePoints.size() + std::abs(OOBx) + std::abs(OOBy) >= 3)
-                {
-                    averagePos /= (int)uniquePoints.size();
-
-                    IntersectionNode* toAdd = new IntersectionNode(averagePos, uniquePoints, zone);
-
-                    // If we already created a point envelopes this area, then don't create redundant node.
-                    if (toAdd == nullptr) break;
-
-                    createdNodes.emplace(toAdd->Get_ID(), std::shared_ptr<IntersectionNode>(toAdd));
-                    newNodes.push_back(toAdd);
-                    for (auto& pt : uniquePoints)
-                    {
-                        pt->AddNode(toAdd);
-                    }
-
-                    x = 2;
-                    y = 2;
-                    break;
-                }
 
                 if (checkY < 0 || checkY >= screenHeight) continue;
                 if (checkX < 0 || checkX >= screenWidth) continue;
@@ -611,6 +628,19 @@ void SketchProgram::EmplaceVoronoiPoint(SketchLine* editLine)
                 }
             }
         }
+
+        if (uniquePoints.size() + std::abs(OOBx) + std::abs(OOBy) >= 3)
+        {
+            averagePos /= (int)uniquePoints.size();
+
+            std::shared_ptr<IntersectionNode> toAdd = std::make_shared<IntersectionNode>(averagePos, uniquePoints, zone);
+
+            createdNodes.emplace(toAdd->Get_ID(), std::shared_ptr<IntersectionNode>(toAdd));
+            for (auto& pt : uniquePoints)
+            {
+                pt->AddNode(std::shared_ptr<IntersectionNode>(toAdd));
+            }
+        }
     }
     pixelsToEvaluate.clear();
 
@@ -619,37 +649,109 @@ void SketchProgram::EmplaceVoronoiPoint(SketchLine* editLine)
     // will involve pixels outside of the new voronoi zone.
     for (auto& pt : affectedPoints)
     {
-        for (int x = 0; x < screenWidth; x++)
+        if (updateAffectedBarycentric)
         {
-            for (int y = 0; y < screenHeight; y++)
+            for (int x = 0; x < screenWidth; x++)
             {
-                VoronoiPoint* minPt = normalMapColors[x][y]->Get_MinPoint();
-                if (minPt == nullptr) continue;
-
-                if (minPt->Get_ID() == pt.first && minPt->Get_VoronoiZone() == pt.second->Get_VoronoiZone())
+                for (int y = 0; y < screenHeight; y++)
                 {
-                    pixelsToUpdate.push_back(std::shared_ptr<DynamicColor>(normalMapColors[x][y]));
+                    VoronoiPoint* minPt = normalMapColors[x][y]->Get_MinPoint();
+                    if (minPt == nullptr) continue;
+
+                    if (minPt->Get_ID() == pt.first && minPt->Get_VoronoiZone() == pt.second->Get_VoronoiZone())
+                    {
+                        pixelsToUpdate.push_back(normalMapColors[x][y]);
+                    }
                 }
             }
         }
 
         // Remove redundant nodes from voronoi points affected.
-        for (auto& node : redundantNodes)
+        for (auto& nodeID : redundantNodes)
         {
-            pt.second->RemoveNode(node);
+            pt.second->RemoveNode(nodeID);
         }
     }
 
     // Remove redundant nodes from global container (should be last ref. to them, making them delete as well)
-    for (auto& node : redundantNodes)
+    for (auto& nodeID : redundantNodes)
     {
-        createdNodes.erase(node->Get_ID());
+        createdNodes.erase(nodeID);
     }
 
     // Now that nodes are created, we need each pixel to know what triangle
     // created by the voronoi point and its nodes that it resides in.
     // Checks for point-triangle intersection check each iteration for each pixel.
-    for (auto& pix : pixelsToUpdate)
+    if (updateAffectedBarycentric)
+        BarycentricUpdate(pixelsToUpdate);
+}
+
+bool SketchProgram::PointRectOverlap(const SDL_Rect& aabb, const Vector2D& pt)
+{
+    return (aabb.x <= pt[0] && aabb.x + aabb.w >= pt[0] &&
+            aabb.y <= pt[1] && aabb.y + aabb.h >= pt[1]);
+}
+
+SketchLine* SketchProgram::DrawSketchLine(bool placePoint)
+{
+    SketchLine* editLine = (sketchLines.empty()) ? nullptr : sketchLines.back().get();
+
+    // If mouse was just clicked, create new line at mouse position.
+    if (!leftMouseDownLastFrame)
+    {
+        editLine = new SketchLine(mousePos, mousePos);
+        sketchLines.push_back(std::shared_ptr<SketchLine>(editLine));
+
+        if (placePoint)
+        {
+            int zone = voronoiZonesByPixel[(int)mousePos[0]][(int)mousePos[1]];
+            std::shared_ptr<VoronoiPoint> newPoint = std::make_shared<VoronoiPoint>(editLine->Get_Origin(), editLine->Get_RenderColor(), zone);
+            EmplaceVoronoiPoint(newPoint);
+            newestPointID = newPoint->Get_ID();
+            voronoiPoints[newestPointID] = std::move(newPoint);
+        }
+    }
+
+    editLine->SetEndPoint(mousePos);
+
+    // Set normal encoding of vornoi point based on angle of line
+    // drawn. If space is held, override that and use default normal color.
+    const Uint8* keys = SDL_GetKeyboardState(NULL);
+    editLine->SetColorMode(keys[SDL_SCANCODE_SPACE]);
+    editLine->UpdateColor();
+
+    if (placePoint)
+        voronoiPoints[newestPointID]->Set_NormalEncoding(editLine->Get_RenderColor());
+
+    mainVecField->UpdateAll();
+
+    return editLine;
+}
+
+void SketchProgram::MoveSelectedPoints()
+{
+    if (middleMouseDownLastFrame)
+    {
+        pointPositionsDirty = true;
+        for (auto& vPt : selectedPoints)
+        {
+            vPt.second->Set_Position(vPt.second->Get_Position() - (prevMousePos - mousePos));
+        }
+    }
+    else if (pointPositionsDirty)
+    {
+        RebuildMapNaive();
+        pointPositionsDirty = false;
+    }
+
+}
+
+void SketchProgram::BarycentricUpdate(const std::vector<DynamicColor*>& toUpdate)
+{
+    // If a triangle formed by using the voronoi point and two adjacent nodes overlaps a pixel,
+    // then it resides within that triangle and should update color according to those nodes
+    // and calculated coordinates.
+    for (auto& pix : toUpdate)
     {
         auto evalPt = pix->Get_MinPoint();
         auto nodeList = evalPt->Get_NeighboringNodes();
@@ -671,14 +773,263 @@ void SketchProgram::EmplaceVoronoiPoint(SketchLine* editLine)
 
         if (success) continue;
 
-        /*std::cout << "Error: Pixel not overlapping any triangle at: ";
-        std::cout << pix->Get_PixelPosition()[0] << " " << pix->Get_PixelPosition()[1] << "\n";*/
+        //std::cout << "Could not find triangle for pixel\n";
     }
-    voronoiPoints.push_back(std::move(newPoint));
+}
 
-    // With updated pixel info, recreate texture
+void SketchProgram::CheckForIntersections(const std::vector<DynamicColor*>& toCheck)
+{
+    for (auto& pix : toCheck)
+    {
+        int pixX = pix->Get_PixelPosition()[0];
+        int pixY = pix->Get_PixelPosition()[1];
+        int zone = pix->Get_VoronoiZone();
+
+        //std::cout << pix->Get_PixelPosition()[0] << " " << pix->Get_PixelPosition()[1] << "\n";
+
+        int OOBx = 0;   // Determines if we HAVE GONE out of bounds at some point thus far (sign says direction)
+        int OOBy = 0;   // Same as above, for y-direction.
+        std::vector<VoronoiPoint*> uniquePoints;
+        Vector2D averagePos = Vector2D(pixX, pixY);
+        for (int x = -1; x <= 1; x++)
+        {
+            int checkX = pixX + x;
+            OOBx = (OOBx == 0) ? ((checkX < 0) ? -1 : (checkX >= screenWidth) ? 1 : 0) : OOBx;
+
+            for (int y = -1; y <= 1; y++)
+            {
+                int checkY = pixY + y;
+                OOBy = (OOBy == 0) ? ((checkY < 0) ? -1 : (checkY >= screenHeight) ? 1 : 0) : OOBy;
+
+                if (checkY < 0 || checkY >= screenHeight) continue;
+                if (checkX < 0 || checkX >= screenWidth) continue;
+
+                bool contains = false;
+                VoronoiPoint* add = normalMapColors[checkX][checkY]->Get_MinPoint();
+                if (add == nullptr) break;
+
+                for (auto* pt : uniquePoints)
+                {
+                    if (pt->Get_ID() == normalMapColors[checkX][checkY]->Get_MinPoint()->Get_ID())
+                    {
+                        contains = true;
+                        break;
+                    }
+                }
+
+                if (!contains)
+                {
+                    averagePos += Vector2D(checkX, checkY);
+                    uniquePoints.push_back(add);
+                }
+            }
+        }
+
+        if (uniquePoints.size() + std::abs(OOBx) + std::abs(OOBy) >= 3)
+        {
+            averagePos /= (int)uniquePoints.size();
+
+            std::shared_ptr<IntersectionNode> toAdd = std::make_shared<IntersectionNode>(averagePos, uniquePoints, zone);
+
+            createdNodes.emplace(toAdd->Get_ID(), std::shared_ptr<IntersectionNode>(toAdd));
+            for (auto& pt : uniquePoints)
+            {
+                pt->AddNode(std::shared_ptr<IntersectionNode>(toAdd));
+            }
+        }
+    }
+}
+
+void SketchProgram::RebuildMapNaive()
+{
+    for (int x = 0; x < screenWidth; x++)
+        for (int y = 0; y < screenHeight; y++)
+        {
+            normalMapColors[x][y]->ClearVoronoiData();
+        }
+
+    for (auto& vPt : voronoiPoints)
+    {
+        vPt.second->ClearNodes();
+    }
+
+    createdNodes.clear();
+
+    std::cout << "Rebuilding map...\n";
+    int cnt = voronoiPoints.size();
+    int cur = 1;
+    for (auto& vPt : voronoiPoints)
+    {
+        EmplaceVoronoiPoint(vPt.second, false);
+        std::cout << "(" << cur++ << "/" <<  cnt << ") points placed\n";
+    }
+
+    // These similar loops might seem silly, but rebuilding the map is already incredibly slow,
+    // so I threw this if statement at the top level like so to reduce slowdown
+    // from thousands of branches
+    std::cout << "Updating pixels...\n";
+    if (!voronoiPoints.empty())
+    {
+        for (int x = 0; x < screenWidth; x++)
+        {
+            BarycentricUpdate(normalMapColors[x]);
+            for (int y = 0; y < screenHeight; y++)
+            {
+                normalMapColors[x][y]->UpdatePixel();
+            }
+        }
+    }
+    else
+    {
+        for (int x = 0; x < screenWidth; x++)
+        {
+            for (int y = 0; y < screenHeight; y++)
+            {
+                normalMapColors[x][y]->UpdatePixel();
+            }
+        }
+    }
+
+    mainVecField->UpdateAll();
+        
+    std::cout << "Map Rebuilt!\n";
+
     SDL_DestroyTexture(normalMapTexture);
     CreateTextureFromPixelData(normalMapTexture, normalMapPixels[0], screenWidth, screenHeight, 3);
+}
+
+void SketchProgram::RecolorSelectedPoints(SketchLine* followLine)
+{
+    // Below is code that tries to optimize which pixels should update when recoloring
+    // multiple points, but it doesn't work right now; for now just update all pixels.
+    
+    if (!leftMouseDownLastFrame)
+    {
+        pixelsToUpdate.clear();
+
+        for(int x = 0; x < screenWidth; x++)
+            for (int y = 0; y < screenHeight; y++)
+            {
+                DynamicColor* it = normalMapColors[x][y];
+                if (it->Get_TriNodeA() == nullptr || it->Get_TriNodeB() == nullptr)
+                    continue;
+
+                bool found = false;
+                // Pixel should update if it's barcentric blending is involved with the points'
+                // nodes, since those nodes are influenced by the points themselves.
+                for (auto& ptA : it->Get_TriNodeA()->Get_IntersectingPoints())
+                {
+                    if (selectedPoints.count(ptA->Get_ID()) >= 1)
+                    {
+                        pixelsToUpdate.push_back(it);
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (found) continue;    // Save some computing time if we know we found a pixel that should update already.
+                
+                for (auto& ptB : it->Get_TriNodeB()->Get_IntersectingPoints())
+                {
+                    if (selectedPoints.count(ptB->Get_ID()) >= 1)
+                    {
+                        pixelsToUpdate.push_back(it);
+                        break;
+                    }
+                }
+            }
+
+    }
+
+    SDL_Color cacheCol = followLine->Get_RenderColor();
+    for (auto& vPt : selectedPoints)
+    {
+        vPt.second->Set_NormalEncoding(cacheCol);
+    }
+
+    //for (int x = 0; x < screenWidth; x++)
+    //    for (int y = 0; y < screenHeight; y++)
+    //    {
+    //        normalMapColors[x][y]->UpdatePixel();
+    //    }
+}
+
+void SketchProgram::DeleteSelectedPoints()
+{
+    for (auto& pt : selectedPoints)
+    {
+        voronoiPoints.erase(pt.first);
+        for (auto& node : pt.second->Get_NeighboringNodes())
+        {
+            createdNodes.erase(node->Get_ID());
+        }
+    }
+
+    RebuildMapNaive();
+    selectedPoints.clear();
+
+    /*
+    std::vector<DynamicColor*> affectedPixels;
+    for (int x = 0; x < screenWidth; x++)
+        for (int y = 0; y < screenHeight; y++)
+        {
+            DynamicColor* it = normalMapColors[x][y];
+            Vector2D cacheItPos = it->Get_PixelPosition();
+            if (selectedPoints.count(it->Get_MinPoint()->Get_ID()) >= 1)
+            {
+                int minPtID = -1;
+                float min = FLT_MAX;
+                for (auto& pt : voronoiPoints)
+                {
+                    float dist = (pt.second->Get_Position() - cacheItPos).SqrMagnitude();
+                    if (dist < min)
+                    {
+                        min = dist;
+                        minPtID = pt.first;
+                    }
+                }
+
+                it->ClearVoronoiData();
+                it->TryAddMinPoint(voronoiPoints[minPtID]);
+
+                affectedPixels.push_back(it);
+            }
+        }
+
+    std::vector<int> removeNodeIDs;
+    for (auto& pt : selectedPoints)
+    {
+        for (auto& node : pt.second->Get_NeighboringNodes())
+        {
+            removeNodeIDs.push_back(node->Get_ID());
+            
+        }
+        voronoiPoints.erase(pt.first);
+    }
+
+    for (auto& id : removeNodeIDs)
+    {
+        createdNodes.erase(id);
+        for (auto& vPt : voronoiPoints)
+        {
+            vPt.second->RemoveNode(id);
+        }
+    }
+    selectedPoints.clear();
+
+    // Refresh intersection point info (TODO)
+    CheckForIntersections(affectedPixels);
+
+    // Update pixels now that info is refreshed after delete.
+    for (int x = 0; x < screenWidth; x++)
+        BarycentricUpdate(normalMapColors[x]);
+
+    for (int x = 0; x < screenWidth; x++)
+        for (int y = 0; y < screenHeight; y++)
+        {
+            normalMapColors[x][y]->UpdatePixel();
+        }
+*/
 }
 
 // ---- Getters/Setters --- //

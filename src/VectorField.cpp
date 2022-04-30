@@ -14,7 +14,7 @@ VectorField::~VectorField()
 
 }
 
-void VectorField::InitializeVectors(const std::vector<std::vector<std::shared_ptr<DynamicColor>>>& pixmap, float lineLength)
+void VectorField::InitializeVectors(const std::vector<std::vector<DynamicColor*>>& pixmap, float lineLength)
 {
     int maxX = pixmap.size() - padding - padding;
     int maxY = pixmap[0].size() - padding - padding;
@@ -22,7 +22,7 @@ void VectorField::InitializeVectors(const std::vector<std::vector<std::shared_pt
     fieldLines.resize(sizeX);
     for (int x = 0; x < sizeX; x++)
     {
-        std::vector<std::shared_ptr<FieldLine>> temp;
+        std::vector<FieldLine*> temp;
         temp.reserve(sizeY);
         for (int y = 0; y < sizeY; y++)
         {
@@ -34,7 +34,7 @@ void VectorField::InitializeVectors(const std::vector<std::vector<std::shared_pt
             int pixY = (int)pos[1];
             
             FieldLine* newLine = new FieldLine(pixmap[pixX][pixY], pos, lineLength);
-            temp.push_back(std::shared_ptr<FieldLine>(newLine));
+            temp.push_back(newLine);
         }
         fieldLines[x].insert(fieldLines[x].end(), temp.begin(), temp.end());
     }
