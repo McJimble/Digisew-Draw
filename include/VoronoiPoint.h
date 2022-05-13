@@ -23,13 +23,16 @@ public:
 	void AddNode(const std::shared_ptr<IntersectionNode>& node);
 	bool RemoveNode(int nodeID);
 	void ClearNodes();
+	void FlipPolarity();
 
 	const std::vector<std::shared_ptr<IntersectionNode>>& Get_NeighboringNodes() const;
 	const int Get_ID() const;
 	const int Get_VoronoiZone() const;
 	const Vector2D& Get_Position() const;
 	const PixelRGB& Get_NormalEncoding() const;
+	bool Get_PolaritySwapped() const;
 
+	void Set_Polarity(bool pol);
 	void Set_VoronoiZone(int zone);	// In case we want to change zone image at runtime.
 	void Set_NormalEncoding(const SDL_Color& normalEncoding);
 	void Set_RenderColor(const SDL_Color& renderColor);
@@ -41,6 +44,7 @@ private:
 
 	std::vector<std::shared_ptr<IntersectionNode>> neighboringNodes;
 
+	bool positivePolarity;				// True = Uses Positve X side of normal map color wheel only; False = Uses negative X only.
 	int id;								// ID of this object given at creation.
 	int zoneIndex;						// Zone this point is inside of.
 	Vector2D position;					// Position of point on the screen.

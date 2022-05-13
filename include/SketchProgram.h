@@ -27,8 +27,8 @@
 // Fixing window name + dimensions for now to make start code simpler.
 // Can change later if needed.
 #define WINDOW_NAME "Digisew-Draw"
-#define DEF_SCREEN_WIDTH 1000
-#define DEF_SCREEN_HEIGHT 1000
+#define DEF_SCREEN_WIDTH 512
+#define DEF_SCREEN_HEIGHT 512
 
 /*
  *	Main engine/driver for the sketch program. Handles main functionality such as

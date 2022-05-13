@@ -21,7 +21,10 @@ void FieldLine::UpdateLine()
 	if (!colorToRead) return;
 
 	const PixelRGB* readThisFrame = colorToRead->Get_AffectedPixel();
-	direction = Helpers::HalfNormalColorToDirection(readThisFrame->r, readThisFrame->g);
+	Vector2D voronoiPos = colorToRead->Get_MinPoint()->Get_Position();
+
+	//direction = Helpers::HalfNormalColorToDirection(readThisFrame->r, readThisFrame->g, colorToRead->Get_MinPoint()->Get_PolaritySwapped());
+	direction = Vector2D(Helpers::InverseLerp(128.0f, 255.0f, readThisFrame->r), -Helpers::InverseLerp(128.0f, 255.0f, readThisFrame->g)).Get_Normalized();
 	length = (Helpers::InverseLerp(255, 128, readThisFrame->b)) * initialLength;
 
 	if (readThisFrame->r == 128 && readThisFrame->g == 128)
@@ -29,13 +32,12 @@ void FieldLine::UpdateLine()
 		direction = Vector2D(0.0f, 0.0f);
 	}
 
-	Vector2D voronoiPos = colorToRead->Get_MinPoint()->Get_Position();
-
 	startPoint = position - (direction * length * 0.5f);
 	endPoint = startPoint + (direction * length);
 }
 
 void FieldLine::RenderLine(SDL_Renderer* rend)
 {
+
 	SDL_RenderDrawLineF(rend, startPoint[0], startPoint[1], endPoint[0], endPoint[1]);
 }

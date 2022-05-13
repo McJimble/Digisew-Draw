@@ -22,7 +22,10 @@ public:
 	void SetStartPoint(const Vector2D& start);
 	void SetEndPoint(const Vector2D& end);
 	void SetColorMode(bool enableBlue);
+	void SetPolarity(bool pol);
+	void FlipPolarity();
 
+	bool Get_Polarity();			// True = postive X half of normal map color wheel, False = negative X
 	float Get_Magnitude();			// Length of line.
 	Vector2D Get_Origin();			// Origin point, probably where mouse was initially clicked.
 	Vector2D Get_Midpoint();		// Midpoint of line.
@@ -38,6 +41,7 @@ private:
 	static int defaultColorDistSqr;
 
 	bool blueSetMode = false;
+	bool positivePolarity = true;
 	Uint8 restoreR, restoreG;
 
 	// Represents line direction and position in screen space.

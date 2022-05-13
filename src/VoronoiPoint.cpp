@@ -11,6 +11,7 @@ VoronoiPoint::VoronoiPoint(const Vector2D& position, const PixelRGB& normalEncod
 	this->zoneIndex			= zone;
 	this->id = nextID++;
 	this->renderColor = { 0, 0, 0, 255 };
+	this->positivePolarity = true;
 }
 
 VoronoiPoint::VoronoiPoint(const Vector2D& position, const SDL_Color& normalEncoding, int zone)
@@ -23,6 +24,7 @@ VoronoiPoint::VoronoiPoint(const Vector2D& position, const SDL_Color& normalEnco
 	this->zoneIndex = zone;
 	this->id = nextID++;
 	this->renderColor = { 0, 0, 0, 255 };
+	this->positivePolarity = true;
 }
 
 void VoronoiPoint::RenderPoint(SDL_Renderer* rend)
@@ -110,6 +112,11 @@ void VoronoiPoint::ClearNodes()
 	neighboringNodes.clear();
 }
 
+void VoronoiPoint::FlipPolarity()
+{
+	positivePolarity = !positivePolarity;
+}
+
 const std::vector<std::shared_ptr<IntersectionNode>>& VoronoiPoint::Get_NeighboringNodes() const
 {
 	return neighboringNodes;
@@ -133,6 +140,16 @@ const Vector2D& VoronoiPoint::Get_Position() const
 const PixelRGB& VoronoiPoint::Get_NormalEncoding() const
 {
 	return normalEncoding;
+}
+
+bool VoronoiPoint::Get_PolaritySwapped() const
+{
+	return positivePolarity;
+}
+
+void VoronoiPoint::Set_Polarity(bool pol)
+{
+	positivePolarity = pol;
 }
 
 void VoronoiPoint::Set_VoronoiZone(int zone)

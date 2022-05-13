@@ -193,7 +193,7 @@ void Helpers::Vector2DtoNormalColor(const Vector2D& vec, SDL_Color* ret)
     ret->a = 255;
 }
 
-void Helpers::Vector2DtoNormalColorHalf(const Vector2D& vec, PixelRGB* ret)
+void Helpers::Vector2DtoNormalColorHalf(const Vector2D& vec, PixelRGB* ret, bool posPolarity)
 {
     float mag = vec.Magnitude();
     if (mag < 0.001f)
@@ -213,7 +213,7 @@ void Helpers::Vector2DtoNormalColorHalf(const Vector2D& vec, PixelRGB* ret)
     ret->b = 128;
 }
 
-void Helpers::Vector2DtoNormalColorHalf(const Vector2D& vec, SDL_Color* ret)
+void Helpers::Vector2DtoNormalColorHalf(const Vector2D& vec, SDL_Color* ret, bool positivePolarity)
 {
     float mag = vec.Magnitude();
     if (mag < 0.001f)
@@ -228,22 +228,22 @@ void Helpers::Vector2DtoNormalColorHalf(const Vector2D& vec, SDL_Color* ret)
 
     vNorm[0] = std::abs(vNorm[0]);
 
-    // Cutting x-axis in half; y-axis is inverted (becuase of SDL) and still maintains
+    // Cutting x-axis in half; y-axis is inverted (because of SDL) and still maintains
     // its full range. Therefore, y-axis must be remaped between -1 and 1 for its lerp
     // while the x-axis is naturally always positive and between 0-1.
-    ret->r = (Uint8)(Lerp(128, 255, vNorm[0]));
-    ret->g = (Uint8)(Lerp(0, 255, InverseLerp(-1.0f, 1.0f, -vNorm[1]))); 
+    ret->r = (positivePolarity) ? (Uint8)(Lerp(128, 255, vNorm[0])) : (Uint8)(Lerp(128, 0, vNorm[0]));
+    ret->g = (Uint8)(Lerp(0, 255, InverseLerp(-1.0f, 1.0f, ((positivePolarity) ? -vNorm[1] : vNorm[1]))));
     ret->b = 128;
     ret->a = 255;
 }
 
-Vector2D Helpers::HalfNormalColorToDirection(Uint8 r, Uint8 g)
+Vector2D Helpers::HalfNormalColorToDirection(Uint8 r, Uint8 g, bool positivePolarity)
 {
     r = std::max(128, (int)r);
     
     // X is always positive, Y can be negative (due to unclamped inverse lerp)
-    return Vector2D(InverseLerp(128.0f, 255.0f, (float)r),
-                    -InverseLerp(128.0f, 255.0f, (float)g)).Get_Normalized();
+    return Vector2D((positivePolarity) ? InverseLerp(128.0f, 255.0f, (float)r) : InverseLerp(128.0f, 0.0f, (float)r), // x
+                    -InverseLerp(128.0f, 255.0f, (float)g)).Get_Normalized();                                         // y
 }
 
 float Helpers::InverseLerp(float min, float max, float val)

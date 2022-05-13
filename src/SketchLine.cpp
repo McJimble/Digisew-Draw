@@ -62,10 +62,12 @@ void SketchLine::UpdateColor()
 	}
 	else
 	{
-		Helpers::Vector2DtoNormalColorHalf(direction, &rendColor);
+		Helpers::Vector2DtoNormalColorHalf(direction, &rendColor, positivePolarity);
 		restoreR = rendColor.r;
 		restoreG = rendColor.g;
 	}
+
+	std::cout << (int)rendColor.r << ", " << (int)rendColor.g << "\n";
 }
 
 void SketchLine::SetStartPoint(const Vector2D& start)
@@ -85,10 +87,20 @@ void SketchLine::SetColorMode(bool enableBlue)
 	blueSetMode = enableBlue;
 }
 
-//void SketchLine::ColorEncompassedPixels(DynamicColor**& screenColorArray)
-//{
-//    
-//}
+void SketchLine::SetPolarity(bool pol)
+{
+	positivePolarity = pol;
+}
+
+void SketchLine::FlipPolarity()
+{
+	positivePolarity = !positivePolarity;
+}
+
+bool SketchLine::Get_Polarity()
+{
+	return positivePolarity;
+}
 
 float SketchLine::Get_Magnitude()
 {

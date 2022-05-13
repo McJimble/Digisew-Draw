@@ -131,7 +131,7 @@ void SketchProgram::PollEvents()
                 debugDisplay = !debugDisplay;
             }
             
-            else if (event.key.keysym.sym == SDLK_s)
+            if (event.key.keysym.sym == SDLK_s)
             {
                 std::string filename;
                 std::string fileExtension;
@@ -145,6 +145,18 @@ void SketchProgram::PollEvents()
             if (event.key.keysym.sym == SDLK_DELETE)
             {
                 DeleteSelectedPoints();
+            }
+
+            if (event.key.keysym.sym == SDLK_f)
+            {
+                if (sketchLines.empty()) continue;
+                
+                sketchLines.back()->FlipPolarity();
+
+                for (auto& pt : selectedPoints)
+                {
+                    pt.second->FlipPolarity();
+                }
             }
         }
     }
@@ -567,7 +579,7 @@ void SketchProgram::EmplaceVoronoiPoint(std::shared_ptr<VoronoiPoint>& newPoint,
 
                 for (auto& node : createdNodes)
                 {
-                    if ((it->Get_PixelPosition() - node.second->Get_Position()).SqrMagnitude() <= 0.5)
+                    if ((it->Get_PixelPosition() - node.second->Get_Position()).SqrMagnitude() <= 1.5)
                     {
                         redundantNodes.push_back(node.first);
                     }
@@ -720,9 +732,11 @@ SketchLine* SketchProgram::DrawSketchLine(bool placePoint)
     editLine->SetColorMode(keys[SDL_SCANCODE_SPACE]);
     editLine->UpdateColor();
 
-    if (placePoint)
+    if (placePoint) 
+    {
         voronoiPoints[newestPointID]->Set_NormalEncoding(editLine->Get_RenderColor());
-
+        voronoiPoints[newestPointID]->Set_Polarity(editLine->Get_Polarity());
+    }
     mainVecField->UpdateAll();
 
     return editLine;
@@ -942,9 +956,11 @@ void SketchProgram::RecolorSelectedPoints(SketchLine* followLine)
     }
 
     SDL_Color cacheCol = followLine->Get_RenderColor();
+    bool cachePolarity = followLine->Get_Polarity();
     for (auto& vPt : selectedPoints)
     {
         vPt.second->Set_NormalEncoding(cacheCol);
+        vPt.second->Set_Polarity(cachePolarity);
     }
 
     //for (int x = 0; x < screenWidth; x++)

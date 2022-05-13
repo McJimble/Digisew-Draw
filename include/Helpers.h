@@ -62,14 +62,14 @@ public:
 	 *  range allowed by normal maps. Can be used to avoid discrepancy between'
 	 *  what direction a line was drawn.
 	 */
-	static void Vector2DtoNormalColorHalf(const Vector2D& vec, PixelRGB* ret);
-	static void Vector2DtoNormalColorHalf(const Vector2D& vec, SDL_Color* ret);
+	static void Vector2DtoNormalColorHalf(const Vector2D& vec, PixelRGB* ret, bool positivePolarity = true);
+	static void Vector2DtoNormalColorHalf(const Vector2D& vec, SDL_Color* ret, bool positivePolarity = true);
 
 	/*
 	 *	Returns a vector that represents the normal map direction given by
 	 *  the vales of r and g (ignoring the blue channel/z-axis).
 	 */
-	static Vector2D HalfNormalColorToDirection(Uint8 r, Uint8 g);
+	static Vector2D HalfNormalColorToDirection(Uint8 r, Uint8 g, bool positivePolarity = true);
 
 	/*
 	 *  Naive return value is unclamped and doesn't account for edge cases
