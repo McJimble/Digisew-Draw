@@ -120,9 +120,13 @@ void SketchProgram::PollEvents()
     SDL_Event event;
     while (SDL_PollEvent(&event))
     {
-        if (event.type == SDL_QUIT)
+        if (event.type == SDL_WINDOWEVENT)
         {
-            isRunning = false;
+            // Nested so we don't call SDL_GetWindowID so often.
+            if (event.window.windowID == SDL_GetWindowID(window))
+            {
+                isRunning = false;
+            }
         }
         if (event.type == SDL_KEYDOWN)
         {
@@ -983,69 +987,11 @@ void SketchProgram::DeleteSelectedPoints()
 
     RebuildMapNaive();
     selectedPoints.clear();
+}
 
-    /*
-    std::vector<DynamicColor*> affectedPixels;
-    for (int x = 0; x < screenWidth; x++)
-        for (int y = 0; y < screenHeight; y++)
-        {
-            DynamicColor* it = normalMapColors[x][y];
-            Vector2D cacheItPos = it->Get_PixelPosition();
-            if (selectedPoints.count(it->Get_MinPoint()->Get_ID()) >= 1)
-            {
-                int minPtID = -1;
-                float min = FLT_MAX;
-                for (auto& pt : voronoiPoints)
-                {
-                    float dist = (pt.second->Get_Position() - cacheItPos).SqrMagnitude();
-                    if (dist < min)
-                    {
-                        min = dist;
-                        minPtID = pt.first;
-                    }
-                }
-
-                it->ClearVoronoiData();
-                it->TryAddMinPoint(voronoiPoints[minPtID]);
-
-                affectedPixels.push_back(it);
-            }
-        }
-
-    std::vector<int> removeNodeIDs;
-    for (auto& pt : selectedPoints)
-    {
-        for (auto& node : pt.second->Get_NeighboringNodes())
-        {
-            removeNodeIDs.push_back(node->Get_ID());
-            
-        }
-        voronoiPoints.erase(pt.first);
-    }
-
-    for (auto& id : removeNodeIDs)
-    {
-        createdNodes.erase(id);
-        for (auto& vPt : voronoiPoints)
-        {
-            vPt.second->RemoveNode(id);
-        }
-    }
-    selectedPoints.clear();
-
-    // Refresh intersection point info (TODO)
-    CheckForIntersections(affectedPixels);
-
-    // Update pixels now that info is refreshed after delete.
-    for (int x = 0; x < screenWidth; x++)
-        BarycentricUpdate(normalMapColors[x]);
-
-    for (int x = 0; x < screenWidth; x++)
-        for (int y = 0; y < screenHeight; y++)
-        {
-            normalMapColors[x][y]->UpdatePixel();
-        }
-*/
+void SketchProgram::CreateStitchDiagram()
+{
+   
 }
 
 // ---- Getters/Setters --- //

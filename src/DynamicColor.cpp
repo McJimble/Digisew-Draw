@@ -24,7 +24,7 @@ void DynamicColor::UpdatePixel()
     PixelRGB defaultColor;
     defaultColor = Helpers::NormalMapDefaultColor();
 
-    PixelRGB::CopyData((minPt) ? &minPt->Get_NormalEncoding() : &defaultColor, affectedPixel);
+    PixelRGB::Copy((minPt) ? &minPt->Get_NormalEncoding() : &defaultColor, affectedPixel);
 
     // Make pixel black if equidistant to second point
     //PixelRGB black = PixelRGB::MakePixel(0, 0, 0);
@@ -58,7 +58,7 @@ bool DynamicColor::TryAddMinPoint(const std::shared_ptr<VoronoiPoint>& newPoint)
 void DynamicColor::UpdatePixelInterp(const PixelRGB* newColor, float t)
 {
     PixelRGB interpColor = Helpers::LerpColorRGB(*newColor, *affectedPixel, t);
-    PixelRGB::CopyData(&interpColor, affectedPixel);
+    PixelRGB::Copy(&interpColor, affectedPixel);
 }
 
 // Deprecated

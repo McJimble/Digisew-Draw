@@ -35,7 +35,7 @@ void PixelRGB::DeleteContiguous2DPixmap(PixelRGB**& toDeletePixmap)
 	delete[] toDeletePixmap;
 }
 
-void PixelRGB::CopyData(const PixelRGB* src, PixelRGB* dest)
+void PixelRGB::Copy(const PixelRGB* src, PixelRGB* dest)
 {
     dest->r = src->r;
     dest->g = src->g;

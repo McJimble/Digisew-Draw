@@ -3,6 +3,9 @@
 
 /*
  *	Defines an RGB pixel using unsigned chars.
+ * 
+ *	Contains static functions for operating on them rather than normal members,
+ *  since that wouldn't allow 2D-contiguous memory allocation! Sorry if it seems unintuitive
  */
 struct PixelRGB
 {
@@ -27,7 +30,7 @@ struct PixelRGB
 	/*
 	 *	Acts as a memcpy for PixelRGBs.
 	 */
-	static void CopyData(const PixelRGB* src, PixelRGB* dest);
+	static void Copy(const PixelRGB* src, PixelRGB* dest);
 
 	/*
 	 *	Static constructor for a pixel rgb. Again, had to do this to keep the memory

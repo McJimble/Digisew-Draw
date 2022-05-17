@@ -7,7 +7,6 @@
 #include <memory>
 #include <unordered_map>
 
-
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
 #include <SDL2/SDL_image.h>
@@ -18,6 +17,7 @@
 #include "Helpers.h"
 #include "DynamicColor.h"
 #include "VectorField.h"
+#include "StitchResult.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb/stb_image.h"
@@ -63,11 +63,13 @@ public:
 	 different filetypes currently supported:
 	 *		bmp
 	 *      png
-	 *		jpg (SDL_Image.h must be properly linked libjpeg, which is weird to configure)
+	 *		jpg (SDL_Image.h must be properly linked libjpeg, which may be weird to configure)
 	 */
 	void SaveColorMap(std::string& filename);
 
 private:
+
+	std::vector<std::unique_ptr<StitchResult>> stitchResults;
 
 	SDL_DisplayMode displayConfig;	// Display configurations (screen size, refresh rate, etc.)
 	SDL_Window* window;				// Window for SDL
@@ -79,7 +81,7 @@ private:
 	std::vector<std::vector<DynamicColor*>> normalMapColors;					// Colors being sent by normal map sketches
 	std::vector<DynamicColor*> pixelsToUpdate;									// Pixels that will be updated this frame.
 	// ^ The above vars. live for the entire program and are referenced a lot, so I opted to make them raw pointers for performance 
-	// (sorry modern C++ guys, the automatic memory management libraries are dogshit for speed when ownership is shared)
+	// (sorry modern C++ guys, the automatic memory management libraries are awful for speed when ownership is shared)
 	
 	std::unordered_map<int, std::shared_ptr<IntersectionNode>> createdNodes;	// Intersection nodees that have been created thus far (where edges connect)
 	std::vector<std::vector<int>> voronoiZonesByPixel;							// Voronoi zone for each pixel on screen.
@@ -95,6 +97,7 @@ private:
 	int fieldX, fieldY;
 	int fieldPadding;
 
+	// Too many bools for determining program state; this could prob. use refactor, sorry
 	bool isRunning = true;					// Is main program loop currently running?
 	bool leftMouseDownLastFrame = false;	// Was left mouse held down last frame
 	bool rightMouseDownLastFrame = false;	// Was right mouse held down last frame
@@ -110,7 +113,7 @@ private:
 	Vector2D initSelectionPoint = Vector2D(-1.0f, -1.0f);					// Place where right mouse was first clicked to select.
 
 	SDL_Color black = { 0, 0, 0, 255 };
-	SDL_Color white = { 255, 255, 255, 0 };
+	SDL_Color white = { 255, 255, 255, 255 };
 
 	void PollEvents();
 	void Update();
@@ -137,7 +140,6 @@ private:
 	/*
 	 *	Places the currently created sketch line and modifies the pixels
 	 *  with the area it covers. Also updates the current texture
-	 *  OUTDATED, CREATES CIRCLE ON TOP OF TEXTURE
 	 */
 	void EmplaceSketchLine(SketchLine* editLine);
 
@@ -191,6 +193,12 @@ private:
 	 *	Deletes all nodes currently selected, if any. 
 	 */
 	void DeleteSelectedPoints();
+
+	/*
+	 *	Uses pieces of original stitch generation code to open a new window
+	 *	containing final stitch output using the normal map at the state it's in
+	 */
+	void CreateStitchDiagram();
 
 	int Get_ScreenHeight();
 	int Get_ScreenWidth();

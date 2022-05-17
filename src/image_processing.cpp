@@ -39,8 +39,8 @@ using namespace std;
 OIIO_NAMESPACE_USING
 
 // window dimensions
-#define WIDTH 500
-#define HEIGHT 500
+#define WIDTH 512
+#define HEIGHT 512
 
 static int ipicture = 0;
 
@@ -63,6 +63,7 @@ bool doubleStitch = true;
 string normalMap;
 int subgridSize;
 string dstName;
+
 /*
   read an image from the file whose name is specified in the argument.
   if no name is provided, ask the user for a file name.
@@ -97,7 +98,8 @@ void readimage(string name="") {
     int channels = spec.nchannels;
 
     // allocate space in memory to store the image data
-    unsigned char pixmap[channels * width * height];
+    //unsigned char pixmap[channels * width * height];  // <- windows compilers don't like this.. replaced with below
+    unsigned char* pixmap = new unsigned char[channels * width * height];
 
     if (!input->read_image(TypeDesc::UINT8, pixmap)) {
         cerr << "Could not read image " << inputfilename << ", error = " << geterror() << endl;
@@ -112,6 +114,7 @@ void readimage(string name="") {
     // copy the pixmap into the image
     picture = new Image(width, height, channels);
     picture->copyImage(pixmap);   // make a deep copy of the pixmap
+    delete[] pixmap;
 }
 
 /*
@@ -417,50 +420,6 @@ void handleKey(unsigned char key, int x, int y) {
 
               for (edge& e : path)
                 graphVector.push_back(e);
-
-              /*
-              int size = path.size();
-
-              // freedom for perturbation term
-              const int freedom = 1;
-
-              for (edge& e : path) {
-
-                vec2& u = e.u;
-                vec2& v = e.v;
-
-                u.x = freedom * u.x + 1; u.y = freedom * u.y + 1;
-                v.x = freedom * v.x + 1; v.y = freedom * v.y + 1;
-              }
-
-              for (int i = 0; i < size; ++i) {
-
-                // current edge
-                edge e = path[i];
-
-                vec2& u = e.u;
-                vec2& v = e.v;
-
-                int r = genRand(1, 1);
-
-                // perturb randomly in neighborhood
-                if (r == 1) {
-                  // perturb v
-                  int px = genRand(-freedom/2, freedom/2);
-                  int py = genRand(-freedom/2, freedom/2);
-
-                  // painful edge check
-                  if (v.x + px > -1 && v.x + px < freedom * width) v.x += px;
-                  if (v.y + px > -1 && v.y + py < freedom * height) v.y += py;
-                }
-
-                // reduce back
-                u.x = (u.x - 1)/freedom; u.y = (u.y - 1)/freedom;
-                v.x = (v.x - 1)/freedom; v.y = (v.y - 1)/freedom;
-
-                graphVector.push_back(e);
-              }
-              */
 
               // assert(isContiguous(path) == true);
 
@@ -960,48 +919,11 @@ void handleKey(unsigned char key, int x, int y) {
 
               pdata.close();
 
-              /*
-              std::vector<vec2> points;
-              ifstream infile("points_high.txt");
-
-              float x, y;
-              while (infile >> x >> y) {
-                if (x < 0.0 || x > 99.0) continue;
-                if (y < 0.0 || y > 99.0) continue;
-                points.push_back(vec2(x, y));
-              }
-              infile.close();
-              */
-
               // create a map for points and their corresponding densities
               std::unordered_map<vec2, unsigned char, HashVec> densities;
-              /*
-              // fill
-              for (int i = 0; i < points.size(); ++i)
-                densities.insert({points[i], densityPoints[i]});
-              */
-
+        
               // read in the no-gos
               vector<edge> segments;
-
-              /*
-              ifstream nofile("nogos.txt");
-
-              float ux, uy, vx, vy;
-              while (nofile >> ux >> uy >> vx >> vy)
-                segments.push_back(edge(vec2(ux, uy), vec2(vx, vy)));
-
-              nofile.close();
-              */
-
-              /*
-              for (auto& d : densities) {
-                vec2 p = d.first;
-                unsigned char c = d.second;
-
-                cout << "(" << p.x << ", " << p.y << ") : " << int(c) << "\n";
-              }
-              */
 
               cout << "# of points = " << points.size() << "\n";
 
@@ -1026,144 +948,6 @@ void handleKey(unsigned char key, int x, int y) {
 
                 buckets[vec2(x, y)].push_back(point);
               }
-
-              /*
-              // database
-              ofstream paramdata("params.txt");
-
-              // rip!
-              for (float a1 = 1.05; a1 <= 3.0; a1 += 0.5) {
-                for (float b1 = 1.05; b1 <= 5.0; b1 += 0.5) {
-                  for (float a2 = 1.05; a2 <= 3.0; a2 += 0.5) {
-                    for (float b2 = 1.05; b2 <= 5.0; b2 += 0.5) {
-                      for (float blen = 0.5; blen <= 1.0; blen += 0.1) {
-
-                        readimage(normalMap);
-
-                        picture->blend(blen);
-
-                        vector<vec2> normals = picture->interpretNormalMap();
-
-                        // generate random start
-
-                        const vec2 start = points[genRand(0, points.size() - 1)];
-                        // const vec2 start = chooseStart(points, densityPoints);
-
-                        std::unordered_map<vec2, vector<edge>, HashVec> stitchBuckets;
-
-                        // set alphas and betas
-                        alpha1 = a1; beta1 = b1;
-                        alpha2 = a2; beta2 = b2;
-                        vector<edge> g = picture->dijkstra(start, buckets, stitchBuckets,
-                                                           SUBREGION_SIZE,
-                                                           normals, cost1, cost,
-                                                           segments);
-
-                        // fix jumps and get final graph
-                        std::unordered_map<vec2, std::list<vec2>, HashVec> adj =
-                        picture->cleanup(normals, g, cost1,
-                                         buckets, stitchBuckets, SUBREGION_SIZE,
-                                         segments);
-
-                        picture->reverseNormalMap(adj, normals);
-
-                        // tree traversal for path generation
-                        vector<vec2> path;
-                        picture->genPath(adj, densities, path);
-
-                        vector<edge> graph;
-                        // convert path to edges
-                        for (int i = 0; i < path.size() - 2; ++i)
-                          graph.push_back(edge(path[i], path[i + 1]));
-
-                        // print stitch count ratio
-                        float rat = Image::SCR(g);
-                        cout << "SCR = " << rat << "\n";
-
-                        // write
-                        paramdata << alpha1 << " " << beta1 << " " << alpha2 <<
-                                  " " << beta2 << " " << (blen - 0.5) / 0.5 << " "
-                                  << rat << "\n";
-                      }
-                      cout << "b2 " << b2 << " done!\n";
-                    }
-                  }
-                }
-                cout << "a1 = " << a1 << " done!\n";
-              }
-
-              paramdata.close();
-              */
-
-              /*
-              // hand picked values at the extremes
-              float p0[5];
-              // SCR ~ 0.0
-              p0[0] = 1.55; p0[1] = 2.05; p0[2] = 2.05; p0[3] = 4.55; p0[4] = 0.5;
-              // SCR ~ 0.5
-              float p1[5];
-              p1[0] = 1.55; p1[1] = 1.05; p1[2] = 2.05; p1[3] = 2.55; p1[4] = 1.0;
-
-              ofstream paramdata("inter_params_1.txt");
-
-              for (float i = 0.0; i <= 1.0; i += 0.1) {
-                // interpolate and store
-
-                readimage(normalMap);
-
-                float blen = i * p0[4] + (1.0 - i) * p1[4];
-
-                picture->blend(blen * 0.5 + 0.5);
-
-                vector<vec2> normals = picture->interpretNormalMap();
-
-                // generate random start
-
-                const vec2 start = points[genRand(0, points.size() - 1)];
-                // const vec2 start = chooseStart(points, densityPoints);
-
-                std::unordered_map<vec2, vector<edge>, HashVec> stitchBuckets;
-
-                // set alphas and betas
-                alpha1 = i * p0[0] + (1.0 - i) * p1[0];
-                beta1 = i * p0[1] + (1.0 - i) * p1[1];
-                alpha2 = i * p0[2] + (1.0 - i) * p1[2];
-                beta2 = i * p0[3] + (1.0 - i) * p1[3];
-
-                vector<edge> g = picture->dijkstra(start, buckets, stitchBuckets,
-                                                    SUBREGION_SIZE,
-                                                    normals, cost1, cost,
-                                                    segments);
-
-                // fix jumps and get final graph
-                std::unordered_map<vec2, std::list<vec2>, HashVec> adj =
-                picture->cleanup(normals, g, cost1,
-                                  buckets, stitchBuckets, SUBREGION_SIZE,
-                                  segments);
-
-                picture->reverseNormalMap(adj, normals);
-
-                // tree traversal for path generation
-                vector<vec2> path;
-                picture->genPath(adj, densities, path);
-
-                vector<edge> graph;
-                // convert path to edges
-                for (int i = 0; i < path.size() - 2; ++i)
-                  graph.push_back(edge(path[i], path[i + 1]));
-
-                // print stitch count ratio
-                float rat = Image::SCR(g);
-                cout << "SCR = " << rat << "\n";
-
-                // write
-                paramdata << alpha1 << " " << beta1 << " " << alpha2 <<
-                          " " << beta2 << " " << blen << " "
-                          << rat << "\n";
-              }
-
-              paramdata.close();
-              */
 
               // target SCR
               const float SCR = 0.0;
@@ -1245,18 +1029,7 @@ void handleKey(unsigned char key, int x, int y) {
               vector<edge> graph;
               // convert path to edges
               for (int i = 0; i < path.size() - 2; ++i) {
-                /*
-                // test intersection with all other edges
-                bool intersect = false;
-                for (int j = i + 1; j < path.size() - 1; ++j) {
-                  if (doIntersect(path[i], path[i + 1], path[j], path[j + 1])) {
-                    intersect = true;
-                    break;
-                  }
-                }
-                // add if no intersections were detected
-                if (!intersect)
-                */
+              
                 graph.push_back(edge(path[i], path[i + 1]));
               }
 
@@ -1289,41 +1062,6 @@ void handleKey(unsigned char key, int x, int y) {
               pixel p = Image::RMSError(v2, v1);
 
               picture = reversedMap;
-              /*
-              glPointSize(2.0);
-              for(size_t i = 0; i < points.size(); i++)
-              {
-                glBegin(GL_POINTS);
-                glColor3f( 1.0, 1.0, 0.0 );
-                glVertex2f(points[i].x * xr, (HEIGHT - points[i].y) * yr);
-                glEnd();
-              }
-              */
-
-              /*
-              // auto it = adj.begin();
-              auto it = std::next(std::begin(adj), genRand(0, adj.size() - 1));
-              vec2 vertex = it->first;
-              vector<vec2> neighbors = it->second;
-
-              for (int i = 0; i < neighbors.size(); ++i) {
-                float x1 = neighbors[i].x;
-                float y1 = HEIGHT - neighbors[i].y;
-                float x2 = vertex.x;
-                float y2 = HEIGHT - vertex.y;
-
-                // scale accord to the window size
-                x1 *= xr; x2 *= xr;
-                y1 *= yr; y2 *= yr;
-
-                // set the drawing color
-                glColor3f(1, 1, 1);
-                glBegin(GL_LINES);
-                  glVertex2f(x2, y2);
-                  glVertex2f(x1, y1);
-                glEnd();
-              }
-              */
 
               ofstream data(dstName);
 
@@ -1377,7 +1115,6 @@ void handleKey(unsigned char key, int x, int y) {
               system(command);
 
               glFlush();
-              // glutPostRedisplay();
             }
             break;
 
@@ -1990,7 +1727,9 @@ void handleArrowKeys(int key, int x, int y) {
 
 /*
    Main program to draw the square, change colors, and wait for quit
-*/
+
+   (Commented out because port of this code doesn't need this main anymore.
+
 int main(int argc, char* argv[]) {
 
     imagenames = argv + 1;
@@ -2029,3 +1768,5 @@ int main(int argc, char* argv[]) {
     glutMainLoop();
     return 0;
 }
+*/
+
