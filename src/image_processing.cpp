@@ -29,6 +29,7 @@
 #endif
 
 #include "edge.h"
+#include "glm/ext.hpp"
 #include "glm/vec2.hpp" // glm::vec2
 #include "glm/gtx/transform.hpp"
 

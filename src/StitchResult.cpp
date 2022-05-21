@@ -3,6 +3,7 @@
 #include <fstream>
 #include <ostream>
 #include <sstream>
+#include <memory>
 
 int StitchResult::resultID = 0;
 
@@ -174,22 +175,29 @@ bool StitchResult::CreateStitches(bool createWindow)
     std::cout << "a1 = " << alpha1 << ", b1 = " << beta1 << ", a2 = " << alpha2 << ", b2 = " << beta2 << "\n";
     std::cout << "w = " << bw << "\n";
 
+    // Temp copy of normal map that is later reversed in legacy code, so this
+    // was required to make it work with new setup.
+    std::unique_ptr<Image> reverseNormMap = std::make_unique<Image>(imgWidth, imgHeight, 4);
+    for (int x = 0; x < imgWidth; x++)
+        for (int y = 0; y < imgHeight; y++)
+        {
+            reverseNormMap->setpixel(x, y, normalMapImg->getpixel(x, y));
+        }
+
     bw = 0.0;
     beta2 = 5.0;
-    normalMapImg->blend(bw * 0.5 + 0.5);
+    reverseNormMap->blend(bw * 0.5 + 0.5);
 
-    std::vector<vec2> normals = normalMapImg->interpretNormalMap();
+    std::vector<vec2> normals = reverseNormMap->interpretNormalMap();
 
     // generate random start
-
     const vec2 start = points[genRand(0, points.size() - 1)];
-    // const vec2 start = chooseStart(points, densityPoints);
 
     std::unordered_map<vec2, std::vector<edge>, HashVec> stitchBuckets;
 
-    // Lambda funcs. below are for use in image->dijkstra(), which requires
-    // functions pointers not tied to any class to determine cost
-    std::vector<edge> g = normalMapImg->dijkstra(start, buckets, stitchBuckets,
+    // cost1 and cost 2 funcs. below are used in image->dijkstra(), which requires
+    // functions pointers not tied to any type to determine cost
+    std::vector<edge> g = reverseNormMap->dijkstra(start, buckets, stitchBuckets,
         SUBREGION_SIZE,
         normals, cost1, cost2,
         segments);
@@ -204,19 +212,19 @@ bool StitchResult::CreateStitches(bool createWindow)
 
     ddata.close();
 
-    normalMapImg->reverseNormalMap(g, normals);
+    reverseNormMap->reverseNormalMap(g, normals);
 
     // fix jumps and get final graph
     std::unordered_map<vec2, std::list<vec2>, HashVec> adj =
-        normalMapImg->cleanup(normals, g, cost1,
+        reverseNormMap->cleanup(normals, g, cost1,
             buckets, stitchBuckets, SUBREGION_SIZE,
             segments);
 
-    normalMapImg->reverseNormalMap(adj, normals);
+    reverseNormMap->reverseNormalMap(adj, normals);
 
     // tree traversal for path generation
     std::vector<vec2> path;
-    normalMapImg->genPath(adj, densities, path);
+    reverseNormMap->genPath(adj, densities, path);
 
     std::vector<edge> graph;
     // convert path to edges
@@ -230,7 +238,7 @@ bool StitchResult::CreateStitches(bool createWindow)
     std::cout << "SCR = " << rat << "\n";
 
     std::vector<bool> isoff;
-    normalMapImg->flagOff(isoff, graph, normals);
+    reverseNormMap->flagOff(isoff, graph, normals);
 
     const int Height = 100;
     const int Width = 100;
@@ -238,20 +246,18 @@ bool StitchResult::CreateStitches(bool createWindow)
     float xr = imgWidth / (float)Width;
     float yr = imgHeight / (float)Height;
 
-    std::vector<pixel> v1 = normalMapImg->readImageIntoBuffer();
+    std::vector<pixel> v1 = reverseNormMap->readImageIntoBuffer();
 
-    Image* reversedMap = normalMapImg.get();
-
-    readimage(normalMap);
-
-    std::vector<pixel> v2 = picture->readImageIntoBuffer();
+    std::vector<pixel> v2 = normalMapImg->readImageIntoBuffer();
 
     pixel p = Image::RMSError(v2, v1);
 
-    picture = reversedMap;
-
     std::ofstream data(dstName);
 
+    // Legacy code addition; drawing with SDL lines over black background instead.
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderFillRect(renderer, NULL);
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     for (int i = 0; i < graph.size(); i += 1) {
         // read consecutive points to draw edge
         float x1 = graph[i].u.x;
@@ -280,20 +286,57 @@ bool StitchResult::CreateStitches(bool createWindow)
         x1 *= xr; x2 *= xr;
         y1 *= yr; y2 *= yr;
 
-        // set the drawing color
-        glColor3f(1, 1, 1);
-        glBegin(GL_LINES);
-        glVertex2f(x2, y2);
-        glVertex2f(x1, y1);
-        glEnd();
+        // Draw line to renderer.
+        SDL_RenderDrawLineF(renderer, x1, y1, x2, y2);
     }
 
     data.close();
 
+    // Save what screen rendered to sitchImg now.
+    SDL_Surface* surfaceTemp;
+    Uint32 rmask, gmask, bmask, amask;
+
+    int channels = 4;
+    int depth = channels * 8;
+    int pitch = channels * imgWidth;
+
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+    rmask = 0xff000000 >> shift;
+    gmask = 0x00ff0000 >> shift;
+    bmask = 0x0000ff00 >> shift;
+    amask = 0x00000000;
+#else 
+    rmask = 0x000000ff;
+    gmask = 0x0000ff00;
+    bmask = 0x00ff0000;
+    amask = 0x00000000;
+#endif
+
+    surfaceTemp = SDL_CreateRGBSurface(0, imgWidth, imgWidth, depth, rmask, gmask, bmask, amask);
+    if (surfaceTemp == NULL)
+    {
+        std::cout << "Surface could not be created\n" << SDL_GetError();
+        return false;
+    }
+
+    SDL_RenderReadPixels(renderer, NULL, SDL_PIXELFORMAT_RGB888, surfaceTemp->pixels, surfaceTemp->pitch);
+    unsigned char* pixels = (unsigned char*)surfaceTemp->pixels;
+    for (int x = 0; x < imgWidth; x++)
+        for (int y = 0; y < imgHeight; y++)
+        {
+            pixel pix;
+            int index = 4 * (y * imgWidth + x);
+            pix.r = pixels[index];
+            pix.g = pixels[index + 1];
+            pix.b = pixels[index + 2];
+            pix.a = 255;
+            stitchImg->setpixel(x, y, pix);
+        }
+
     // run lib emb convert
     char command[50];
 
-    sprintf(command,
+    sprintf_s(command,
         "./libembroidery-convert %s %s",
         dstName.c_str(),
         (dstName.substr(0, dstName.find(".csv")) + ".dst").c_str());
@@ -304,4 +347,6 @@ bool StitchResult::CreateStitches(bool createWindow)
     // becomes a problem in the future for converting the embroidery files, this
     // needs to be changed !!
     system(command);
+
+    return true;
 }

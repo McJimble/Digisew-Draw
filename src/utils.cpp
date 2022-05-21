@@ -132,37 +132,6 @@ void findClosestPair(vec2 m, vec2 &u, vec2 &v, const std::vector<vec2> &points) 
 	}
 }
 
-float cost1(vec2& u, vec2& v, vec2& n) {
-
-    float distance = glm::length(v - u);
-    float cosangle = 0.0;
-
-    if (n.x != 0.0 || n.y != 0.0) {
-        vec2 e1 = glm::normalize(v - u);
-        vec2 e2 = glm::normalize(n);
-        cosangle = fabs(glm::dot(e1, e2));
-    }
-
-    return -pow(alpha1, -distance) * pow(beta1, cosangle);
-}
-
-// cost function for our TSP problem
-float cost(vec2& u, vec2& v, vec2& w) {
-
-    // set both the control parameters as equal
-    // both length of the stitch and angle between stitches
-    // have an equal weight
-    float result = 0.0f;
-
-    vec2 e1 = glm::normalize(u - v);
-    vec2 e2 = glm::normalize(w - v);
-    float cosangle = abs(glm::dot(e1, e2));
-    float distance = glm::length(w - v);
-
-    result = -pow(alpha2, -distance) * beta1 * pow(beta2, -cosangle);
-    return result;
-}
-
 class comp {
 
 public:

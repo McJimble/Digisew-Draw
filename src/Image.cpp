@@ -2295,8 +2295,8 @@ std::vector<edge> Image::dijkstra(
     std::unordered_map<vec2, std::vector<edge>, HashVec>& stitchBuckets,
     const int BUCKET_SIZE,
     const std::vector<vec2>& normals,
-    float(*cost1)(vec2&, vec2&, vec2&, float, float),
-    float(*cost2)(vec2&, vec2&, vec2&, float, float, float),
+    float(*cost1)(vec2&, vec2&, vec2&),
+    float(*cost2)(vec2&, vec2&, vec2&),
 const std::vector<edge>& segments
 ) {
 
