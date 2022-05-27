@@ -6,5 +6,5 @@ Created using C++ and the SDL2 library for simple rendering.
 Currently in active development.
 
 # Dependencies
-- stb_image.h https://github.com/nothings/stb/blob/master/stb_image.h
-- SDL2 https://www.libsdl.org/
+- stb_image.h https://github.com/nothings/stb/blob/master/stb_image.h (included with code already)
+- SDL2 https://www.libsdl.org/ (must install on your own)
