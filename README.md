@@ -9,5 +9,6 @@ Currently in active development.
  **Header only, included in source already:**
   - stb_image.h https://github.com/nothings/stb/blob/master/stb_image.h
   - glm https://github.com/g-truc/glm
+  
  **Must install yourself:**
   - SDL2 https://www.libsdl.org/ (must install on your own)
