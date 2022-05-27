@@ -19,16 +19,13 @@
 #include "VectorField.h"
 #include "StitchResult.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb/stb_image.h"
-
 #undef main
 
 // Fixing window name + dimensions for now to make start code simpler.
 // Can change later if needed.
 #define WINDOW_NAME "Digisew-Draw"
-#define DEF_SCREEN_WIDTH 512
-#define DEF_SCREEN_HEIGHT 512
+#define DEF_SCREEN_WIDTH 500
+#define DEF_SCREEN_HEIGHT 500
 
 /*
  *	Main engine/driver for the sketch program. Handles main functionality such as
@@ -65,7 +62,7 @@ public:
 	 *      png
 	 *		jpg (SDL_Image.h must be properly linked libjpeg, which may be weird to configure)
 	 */
-	void SaveColorMap(std::string& filename);
+	void SaveColorMap(std::string& filename, int winID = 0);
 
 private:
 
@@ -115,6 +112,9 @@ private:
 	SDL_Color black = { 0, 0, 0, 255 };
 	SDL_Color white = { 255, 255, 255, 255 };
 
+	/*
+	 *	For performing a complete program loop that polls input, updates, and renders in real time.  
+	 */
 	void PollEvents();
 	void Update();
 	void Render();

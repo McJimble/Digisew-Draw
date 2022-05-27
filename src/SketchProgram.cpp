@@ -1,5 +1,9 @@
 #include "SketchProgram.h"
 
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb/stb_image.h"
+
 #define SHOW_FPS
 
 void SketchProgram::Initialize()
@@ -122,10 +126,25 @@ void SketchProgram::PollEvents()
     {
         if (event.type == SDL_WINDOWEVENT)
         {
-            // Nested so we don't call SDL_GetWindowID so often.
-            if (event.window.windowID == SDL_GetWindowID(window))
+            if (event.window.event == SDL_WINDOWEVENT_CLOSE)
             {
-                isRunning = false;
+                int winID = event.window.windowID;
+                if (winID == SDL_GetWindowID(window))
+                {
+                    isRunning = false;
+                }
+                else
+                {
+                    for (int i = 0; i < stitchResults.size(); i++)
+                    {
+                        StitchResult* res = stitchResults[i].get();
+                        if (winID == SDL_GetWindowID(res->Get_Window()))
+                        {
+                            stitchResults.erase(stitchResults.begin() + i);
+                            continue;
+                        }
+                    }
+                }
             }
         }
         if (event.type == SDL_KEYDOWN)
@@ -143,7 +162,7 @@ void SketchProgram::PollEvents()
                 std::cout << "Save color map file as (supports .png, .bmp, .jpg): ";
                 std::cin >> filename;
 
-                SaveColorMap(filename);
+                SaveColorMap(filename, event.window.windowID);
             }
 
             if (event.key.keysym.sym == SDLK_DELETE)
@@ -161,6 +180,11 @@ void SketchProgram::PollEvents()
                 {
                     pt.second->FlipPolarity();
                 }
+            }
+
+            if (event.key.keysym.sym == SDLK_h)
+            {
+                CreateStitchDiagram();
             }
         }
     }
@@ -295,7 +319,6 @@ void SketchProgram::Render()
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     }
 
-
     SDL_RenderPresent(renderer);
 }
 
@@ -310,26 +333,45 @@ void SketchProgram::Quit()
     SDL_DestroyRenderer(renderer);
 }
 
-void SketchProgram::SaveColorMap(std::string& filename)
+void SketchProgram::SaveColorMap(std::string& filename, int winID)
 {
     int errCheck;
-    int texW, texH;
     int format = SDL_PIXELFORMAT_RGB24;
-    
-    // Get width and height of texture in case we add additional visuals around screen.
-    errCheck = SDL_QueryTexture(normalMapTexture, NULL, NULL, &texW, &texH);
-    if (errCheck)
+    unsigned char* pixels = (unsigned char*) normalMapPixels[0];
+    SDL_Surface* pixelsToSurf;
+
+    if (winID != SDL_GetWindowID(window))
     {
-        std::cout << "Error querying from normal map texture\n";
-        std::cout << SDL_GetError();
-        return;
+        StitchResult* foundResult = nullptr;
+        for (auto& res : stitchResults)
+        {
+            if (SDL_GetWindowID(res->Get_Window()) == winID)
+            {
+                std::cout << "Saving from window " << SDL_GetWindowTitle(res->Get_Window()) << "\n";
+                foundResult = res.get();
+                break;
+            }
+        }
+
+        if (foundResult == nullptr)
+        {
+            std::cout << "Invalid window id selected when saving.\n";
+            return;
+        }
+
+        SDL_Renderer* rendLoc = foundResult->Get_Renderer();
+        pixels = new unsigned char[screenWidth * screenHeight * 3];
+        SDL_RenderReadPixels(rendLoc, NULL, format, pixels, 3 * screenWidth);
+    }
+    else
+    {
+        std::cout << "Saving from window " + std::string(WINDOW_NAME) + "\n";
     }
 
-    // normalMapPixels array is tied directly to normalMapTexture, so this works as if
-    // we read the texture pixels directly instead
-    SDL_Surface* pixelsToSurf = SDL_CreateRGBSurfaceWithFormatFrom(normalMapPixels[0], texW, texH, SDL_BITSPERPIXEL(format),
-        texW * SDL_BYTESPERPIXEL(format), format);
+    pixelsToSurf = SDL_CreateRGBSurfaceWithFormatFrom(pixels, screenWidth, screenHeight, SDL_BITSPERPIXEL(format),
+        screenWidth * SDL_BYTESPERPIXEL(format), format);
 
+    filename = "output/images/" + filename;
     int off = filename.find_last_of('.');
     std::string fileExtension = filename.substr(off, filename.size() - off);
 
@@ -352,6 +394,12 @@ void SketchProgram::SaveColorMap(std::string& filename)
     }
 
     std::cout << "Saved image to " << filename << "\n";
+
+    SDL_FreeSurface(pixelsToSurf);
+    if (pixels != (unsigned char*)normalMapPixels[0])
+    {
+        delete[] pixels;
+    }
 }
 
 void SketchProgram::ParseZoneMap(const std::string& filename)
@@ -431,7 +479,6 @@ void SketchProgram::ParseZoneMap(const std::string& filename)
                 uniqueColors.push_back(currPixel);
                 normalMapColors[x][y]->SetVoronoiZone((int)uniqueColors.size() - 1);
                 voronoiZonesByPixel[x][y] = (int)uniqueColors.size() - 1;
-                std::cout << "Test\n";
             }
             else
                 delete currPixel;
@@ -991,7 +1038,38 @@ void SketchProgram::DeleteSelectedPoints()
 
 void SketchProgram::CreateStitchDiagram()
 {
-   
+    std::string densName;
+    std::cout << "Enter density map file name: ";
+    std::cin >> densName;
+    densName = "res/densitymaps/" + densName;
+
+    int width, height, bytes;
+    unsigned char* pixels = stbi_load(densName.c_str(), &width, &height, &bytes, 0);
+    PixelRGB** densityMap = PixelRGB::CreateContiguous2DPixmap(width, height, false);
+
+    if (pixels == nullptr)
+    {
+        std::cout << "Unable to load image " << densName << "\n";
+        return;
+    }
+    
+    for (int x = 0; x < width; x++)
+        for (int y = 0; y < height; y++)
+        {
+            int index = bytes * (y * width + x);
+
+            densityMap[x][y].r = static_cast<unsigned char>(pixels[index]);
+            densityMap[x][y].g = static_cast<unsigned char>(pixels[index + 1]);
+            densityMap[x][y].b = static_cast<unsigned char>(pixels[index + 2]);
+        }
+
+    std::unique_ptr<StitchResult> res = std::make_unique<StitchResult>(screenWidth, screenHeight, width, height, normalMapPixels, densityMap);
+    if (res->CreateStitches(true))
+    {
+        stitchResults.push_back(std::move(res));
+    }
+    
+    PixelRGB::DeleteContiguous2DPixmap(densityMap);
 }
 
 // ---- Getters/Setters --- //

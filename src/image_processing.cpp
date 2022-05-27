@@ -266,14 +266,6 @@ float cost2(vec2 &u, vec2 &v, vec2 &n) {
   return -pow(alpha, -distance) * pow(beta, cosangle) + beta;
 }
 
-// constants for the cost functions
-// direction control
-float beta1 = 2.05f;
-float beta2 = 4.4f;
-// stitch length control
-float alpha1 = 1.4f;
-float alpha2 = 2.2f;
-
 // v - u -> potential stitch direction
 // n -> preferred direction
 float cost1(vec2 &u, vec2 &v, vec2 &n) {
@@ -968,8 +960,8 @@ void handleKey(unsigned char key, int x, int y) {
                     if (fabs(w - scr) < diff) {
                       // update
                       diff = fabs(w - scr);
-                      alpha1 = a1; beta1 = b1;
-                      alpha2 = a2; beta2 = b2;
+                      //alpha1 = a1; beta1 = b1;
+                      //alpha2 = a2; beta2 = b2;
                       // update blend
                       bw = w;
                     }
@@ -978,7 +970,6 @@ void handleKey(unsigned char key, int x, int y) {
 
               inparams.close();
 
-              cout << "a1 = " << alpha1 << ", b1 = " << beta1 << ", a2 = " << alpha2 << ", b2 = " << beta2 << "\n";
               cout << "w = " << bw << "\n";
 
               readimage(normalMap);

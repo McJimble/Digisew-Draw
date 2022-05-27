@@ -11,7 +11,7 @@ class StitchResult
 {
 public:
 
-	StitchResult(int w, int h, const PixelRGB**& normalMap);
+	StitchResult(int w, int h, int wn, int hn, PixelRGB**& normalMap, PixelRGB**& densityMap);
 	~StitchResult();
 
 	/*
@@ -26,6 +26,20 @@ public:
 	 */
 	bool CreateStitches(bool createWindow = true);
 
+	Image* Get_StitchImage()
+	{
+		return stitchImg.get();
+	}
+
+	SDL_Renderer* Get_Renderer()
+	{
+		return this->renderer;
+	}
+	SDL_Window* Get_Window()
+	{
+		return this->window;
+	}
+
 private:
 
 	static int resultID;
@@ -37,6 +51,5 @@ private:
 	SDL_Renderer* renderer;
 	SDL_Window* window;
 
-	const float constantDensity = 0.1f;	// Hardcoded 0.1 density across the board
 	const int subgridSize = 10;			// Hardcoded subgrid size of 10 for now.
 };

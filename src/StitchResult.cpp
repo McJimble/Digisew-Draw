@@ -1,4 +1,5 @@
 #include "StitchResult.h"
+#include "Helpers.h"
 
 #include <fstream>
 #include <ostream>
@@ -16,22 +17,35 @@ float alpha2 = 2.2f;
 float beta1 = 2.05f;
 float beta2 = 4.4f;
 
-StitchResult::StitchResult(int w, int h, const PixelRGB**& normalMap)
+StitchResult::StitchResult(int w, int h, int wn, int hn, PixelRGB**& normalMap, PixelRGB**& densityMap)
 {
     this->stitchImg = std::make_unique<Image>(w, h, 4);
-    this->densityMapImg = std::make_unique<Image>(w, h, 4);
-    this->normalMapImg = std::make_unique<Image>(w, h, 4);
+    this->densityMapImg = std::make_unique<Image>(wn, hn, 4);
+    this->normalMapImg = std::make_unique<Image>(wn, hn, 4);
 
-    unsigned char dens = 255 / constantDensity; // Uniform density value for now.
-    for (int x = 0; x < w; ++x)
+    // Scale normal map up/down based on the density image provided.
+    // Performs a psuedo-scaling method that results in a non-filtered version of the original.
+    float incrementX = (float)w / wn;
+    float incrementY = (float)h / hn;
+    float xf = 0.01f;
+    float yf = 0.01f;
+
+    for (int x = 0; x < wn; ++x)
     {
-        for (int y = 0; y < h; ++y)
+        for (int y = 0; y < hn; ++y)
         {
-            const PixelRGB& pix = normalMap[x][y];  // Cached for free speed
-            normalMapImg->setpixel(x, y, pixel(pix.r, pix.g, pix.b, 255));
+            const PixelRGB& denP = densityMap[x][y];
+            const PixelRGB& pix = normalMap[(int)xf][(int)yf];  // Cached for speed
+            densityMapImg->setpixel(hn - y - 1, x, pixel(denP.r, denP.g, denP.b, 255));
+            normalMapImg->setpixel(hn - y - 1, x, pixel(pix.r, pix.g, pix.b, 255));
 
-            densityMapImg->setpixel(x, y, pixel(dens, dens, dens, 255));
+            yf = Helpers::Clamp(yf + incrementY, 0, h - 1);
         }
+
+        // Increment scale values
+        xf = Helpers::Clamp(xf + incrementX, 0, w - 1);
+        yf = 0.01f;
+        std::cout << xf << ", " << yf << "\n";
     }
 }
 
@@ -81,20 +95,25 @@ float cost2(vec2& u, vec2& v, vec2& w) {
 
 bool StitchResult::CreateStitches(bool createWindow)
 {
+    int imgWidth = stitchImg->getWidth();
+    int imgHeight = stitchImg->getHeight();
+    int normWidth = normalMapImg->getWidth();
+    int normHeight = normalMapImg->getHeight();
+    
     if (createWindow)
     {
-        window = (SDL_CreateWindow("Stitch Result" + resultID++,
+        std::string winName = "Stitch Result ";
+        winName += std::to_string(++resultID);
+
+        window = (SDL_CreateWindow(winName.c_str(),
             SDL_WINDOWPOS_CENTERED,
             SDL_WINDOWPOS_CENTERED,
-            stitchImg->getWidth(),
-            stitchImg->getHeight(),
+            imgWidth,
+            imgHeight,
             0));
 
         renderer = SDL_CreateRenderer(window, -1, 0);
     }
-
-    int imgWidth = stitchImg->getWidth();
-    int imgHeight = stitchImg->getHeight();
 
     // Beginning of legacy stitch generation, with a few modifications for compatibility
     // ---------
@@ -128,8 +147,8 @@ bool StitchResult::CreateStitches(bool createWindow)
     const int SUBREGION_SIZE = 4;
 
     // init the buckets, 10X10 100 buckets
-    for (size_t i = 0; i < imgWidth / SUBREGION_SIZE; ++i)
-        for (size_t j = 0; j < imgHeight / SUBREGION_SIZE; ++j)
+    for (size_t i = 0; i < normWidth / SUBREGION_SIZE; ++i)
+        for (size_t j = 0; j < normHeight / SUBREGION_SIZE; ++j)
             buckets.insert({ vec2(i, j), {} });
 
     // add points into their respective bins
@@ -177,11 +196,11 @@ bool StitchResult::CreateStitches(bool createWindow)
 
     // Temp copy of normal map that is later reversed in legacy code, so this
     // was required to make it work with new setup.
-    std::unique_ptr<Image> reverseNormMap = std::make_unique<Image>(imgWidth, imgHeight, 4);
-    for (int x = 0; x < imgWidth; x++)
-        for (int y = 0; y < imgHeight; y++)
+    std::unique_ptr<Image> reverseNormMap = std::make_unique<Image>(normWidth, normHeight, 4);
+    for (int x = 0; x < normWidth; x++)
+        for (int y = 0; y < normHeight; y++)
         {
-            reverseNormMap->setpixel(x, y, normalMapImg->getpixel(x, y));
+            reverseNormMap->setpixel(normHeight - y - 1, x, normalMapImg->getpixel(x, y));
         }
 
     bw = 0.0;
@@ -244,7 +263,7 @@ bool StitchResult::CreateStitches(bool createWindow)
     const int Width = 100;
 
     float xr = imgWidth / (float)Width;
-    float yr = imgHeight / (float)Height;
+    float yr = imgWidth / (float)Height;
 
     std::vector<pixel> v1 = reverseNormMap->readImageIntoBuffer();
 
@@ -286,9 +305,10 @@ bool StitchResult::CreateStitches(bool createWindow)
         x1 *= xr; x2 *= xr;
         y1 *= yr; y2 *= yr;
 
-        // Draw line to renderer.
-        SDL_RenderDrawLineF(renderer, x1, y1, x2, y2);
+        // Draw line to renderer, accounting for SDL inverting the y-axis.
+        SDL_RenderDrawLineF(renderer, imgWidth - x1, y1, imgWidth - x2, y2);
     }
+    SDL_RenderPresent(renderer);
 
     data.close();
 
