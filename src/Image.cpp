@@ -1195,7 +1195,8 @@ const int SUBGRID_SIZE) {
         for (int wi = ow; wi < ow + SUBGRID_SIZE; ++wi) {
           // count
           pixel current = getpixel(hi, wi);
-          totalIntensity += current.r;
+          //totalIntensity += current.r;
+          totalIntensity += (current.r / 2) + 128;
         }
       }
 
@@ -2368,7 +2369,7 @@ const std::vector<edge>& segments
        // lookup weighting parameter from the normal map
        pixel pix = getpixel(std::floor(current.y), std::floor(current.x));
        float c = (float)(pix.b - 128.0) / 128.0;
-
+       //c = 1;
        // compute final weight
        float w = (1 - c) * w1 + c * w2;
        // float w = std::max((1-c)*w1, c*w2);

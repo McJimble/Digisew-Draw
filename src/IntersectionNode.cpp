@@ -15,7 +15,9 @@ IntersectionNode::IntersectionNode(const Vector2D& setPosition, const std::vecto
 	this->identifier = nextID++;
 	this->intersectingPoints = intersectingPoints;
 	this->voronoiZone = zone;
+
 	UpdateColor();
+	UpdateDensity();
 }
 
 IntersectionNode::~IntersectionNode()
@@ -26,7 +28,6 @@ IntersectionNode::~IntersectionNode()
 void IntersectionNode::UpdateColor()
 {
 	int size = intersectingPoints.size();
-
 	if (size <= 0) return;
 
 	// Temp hardcoded color to test positions/barycentric coordinates
@@ -50,6 +51,20 @@ void IntersectionNode::UpdateColor()
 	this->averageColor.r = (Uint8)(sumR / size);
 	this->averageColor.g = (Uint8)(sumG / size);
 	this->averageColor.b = (Uint8)(sumB / size);
+}
+
+void IntersectionNode::UpdateDensity()
+{
+	int size = intersectingPoints.size();
+	if (size <= 0) return;
+
+	int sumDens = 0;
+	for (int i = 0; i < size; ++i)
+	{
+		sumDens += intersectingPoints[i]->Get_VoronoiDensity();
+	}
+
+	this->averageDensity = (float)sumDens / size;
 }
 
 void IntersectionNode::RenderNode(SDL_Renderer* rend)
@@ -78,6 +93,11 @@ int IntersectionNode::Get_VoronoiZone() const
 const Vector2D& IntersectionNode::Get_Position() const 
 {
 	return position;
+}
+
+const float IntersectionNode::Get_AverageDensity() const
+{
+	return averageDensity;
 }
 
 const PixelRGB& IntersectionNode::Get_AverageColor() const

@@ -1,12 +1,13 @@
 #include "SketchProgram.h"
 
-
 #define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include "stb/stb_image.h"
+#include "stb/stb_image_resize.h"
 
 #define SHOW_FPS
 
-void SketchProgram::Initialize()
+void SketchProgram::Initialize(int argc, char** argv)
 {
     // Modifying iostream a little bit to make cout/cin slightly faster.
     std::ios_base::sync_with_stdio(false);
@@ -33,22 +34,29 @@ void SketchProgram::Initialize()
     screenHeight = DEF_SCREEN_HEIGHT;
     screenWidth = DEF_SCREEN_WIDTH;
 
+    InitializeInputMaps((argc >= 2) ? argv[1] : nullptr, (argc >= 3) ? argv[2] : nullptr);
+
     // Parse with default texture for now
+    // TODO: Uncomment the below code, force zone map to be resized to
+    // screen size dimensions, then fix how zones/regions work (They don't yet).
     std::string filename;
     std::string userInput;
-    std::cout << "Would you like to use a custom zone image? (Y/N)\n";
+    /*std::cout << "Would you like to use a custom zone image? (Y/N)\n";
     std::cin >> userInput;
     if (userInput == "Y" || userInput == "y")
     {
         std::cout << "Enter file name for region image:\n";
         std::cin >> filename;
-    }
+    }*/
     ParseZoneMap(filename);
 
-    std::cout << "Start with an empty canvas? (Y/N)\n";
-    std::cin >> userInput;
+    if (!normalPredetermined)
+    {
+        std::cout << "Start with default square mesh? (Y/N)\n";
+        std::cin >> userInput;
+    }
 
-    if (userInput == "N" || userInput == "n")
+    if (userInput == "Y" || userInput == "y")
     {
         std::cout << "Loading default mesh...\n";
         LoadDefaultMesh();
@@ -149,12 +157,13 @@ void SketchProgram::PollEvents()
         }
         if (event.type == SDL_KEYDOWN)
         {
-            if (event.key.keysym.sym == SDLK_q)
+            SDL_Keycode pressedKey = event.key.keysym.sym;
+            if (pressedKey == SDLK_q)
             {
                 debugDisplay = !debugDisplay;
             }
             
-            if (event.key.keysym.sym == SDLK_s)
+            else if (pressedKey == SDLK_s)
             {
                 std::string filename;
                 std::string fileExtension;
@@ -165,12 +174,12 @@ void SketchProgram::PollEvents()
                 SaveColorMap(filename, event.window.windowID);
             }
 
-            if (event.key.keysym.sym == SDLK_DELETE)
+            else if (pressedKey == SDLK_DELETE)
             {
                 DeleteSelectedPoints();
             }
 
-            if (event.key.keysym.sym == SDLK_f)
+            else if (pressedKey == SDLK_f)
             {
                 if (sketchLines.empty()) continue;
                 
@@ -182,9 +191,19 @@ void SketchProgram::PollEvents()
                 }
             }
 
-            if (event.key.keysym.sym == SDLK_h)
+            else if (pressedKey == SDLK_h)
             {
                 CreateStitchDiagram();
+            }
+
+            else if (pressedKey == SDLK_d)
+            {
+                densityMode = !densityMode;
+                const SDL_Color setCol = (densityMode) ? red : black;
+                for (auto& pt : voronoiPoints)
+                {
+                    pt.second->Set_RenderColor(setCol);
+                }
             }
         }
     }
@@ -192,6 +211,14 @@ void SketchProgram::PollEvents()
 
 void SketchProgram::Update()
 {
+    if (!(CanEditNormals() || CanEditDensity()))
+    {
+        void* pixelsToDisplay = (densityMode) ? densityMapPixels[0] : normalMapPixels[0];
+        SDL_DestroyTexture(normalMapTexture);
+        CreateTextureFromPixelData(normalMapTexture, pixelsToDisplay, screenWidth, screenHeight, 3);
+        return;
+    }
+
     const Uint8* keys = SDL_GetKeyboardState(NULL);
     enableDeletion = keys[SDL_SCANCODE_E];
     enablePersistentSelection = keys[SDL_SCANCODE_LSHIFT];
@@ -237,7 +264,7 @@ void SketchProgram::Update()
             }
             else if (!enablePersistentSelection)
             {
-                vPt->Set_RenderColor(black);
+                vPt->Set_RenderColor((densityMode) ? red : black);
                 selectedPoints.erase(vPt->Get_ID());
             }
         }
@@ -250,6 +277,9 @@ void SketchProgram::Update()
 
         if (leftMouseHeld)
         {
+            // TODO: Track which maps were pulled from a file.
+            // If one of those are selected, don't do anything since editting is
+            // not allowed in that instance.
             if (selectedPoints.empty())
             {
                 DrawSketchLine(true);
@@ -276,8 +306,9 @@ void SketchProgram::Update()
     middleMouseDownLastFrame = middleMouseHeld;
     rightMouseDownLastFrame = rightMouseHeld;
 
+    void* pixelsToDisplay = (densityMode) ? densityMapPixels[0] : normalMapPixels[0];
     SDL_DestroyTexture(normalMapTexture);
-    CreateTextureFromPixelData(normalMapTexture, normalMapPixels[0], screenWidth, screenHeight, 3);
+    CreateTextureFromPixelData(normalMapTexture, pixelsToDisplay, screenWidth, screenHeight, 3);
 }
 
 void SketchProgram::Render()
@@ -285,13 +316,19 @@ void SketchProgram::Render()
     // Currently, background texture is same size as window which cannot be resized.
     SDL_RenderCopy(renderer, normalMapTexture, NULL, NULL);
 
-    if (!sketchLines.empty() && leftMouseDownLastFrame)
+    // If in normal mode but a pre-made map was pulled in, do no extra rendering,
+    // just the texture based the mode.
+    if (!(CanEditNormals() || CanEditDensity()))
     {
-        sketchLines.back()->RenderLine(renderer);
+        SDL_RenderPresent(renderer);
+        return;
     }
 
-    // Render all voronoi points as black pixels.
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    if (!sketchLines.empty() && leftMouseDownLastFrame)
+    {
+        sketchLines.back()->RenderLine(renderer, densityMode);
+    }
+
     for (auto& pt : voronoiPoints)
     {
         pt.second->RenderPoint(renderer);
@@ -328,6 +365,7 @@ void SketchProgram::Quit()
     sketchLines.clear();
     createdNodes.clear();
     PixelRGB::DeleteContiguous2DPixmap(normalMapPixels);
+    PixelRGB::DeleteContiguous2DPixmap(densityMapPixels);
 
     SDL_DestroyWindow(window);
     SDL_DestroyRenderer(renderer);
@@ -337,7 +375,7 @@ void SketchProgram::SaveColorMap(std::string& filename, int winID)
 {
     int errCheck;
     int format = SDL_PIXELFORMAT_RGB24;
-    unsigned char* pixels = (unsigned char*) normalMapPixels[0];
+    unsigned char* pixels = (unsigned char*) ((densityMode) ? densityMapPixels[0] : normalMapPixels[0]);
     SDL_Surface* pixelsToSurf;
 
     if (winID != SDL_GetWindowID(window))
@@ -358,6 +396,7 @@ void SketchProgram::SaveColorMap(std::string& filename, int winID)
             std::cout << "Invalid window id selected when saving.\n";
             return;
         }
+
 
         SDL_Renderer* rendLoc = foundResult->Get_Renderer();
         pixels = new unsigned char[screenWidth * screenHeight * 3];
@@ -391,12 +430,13 @@ void SketchProgram::SaveColorMap(std::string& filename, int winID)
     {
         std::cout << "Error saving color map pixels to bmp\n";
         std::cout << SDL_GetError();
+        return;
     }
-
-    std::cout << "Saved image to " << filename << "\n";
+    else
+        std::cout << "\nSaved image to " << filename << "\n";
 
     SDL_FreeSurface(pixelsToSurf);
-    if (pixels != (unsigned char*)normalMapPixels[0])
+    if (pixels != (unsigned char*)normalMapPixels[0] && pixels != (unsigned char*)densityMapPixels[0])
     {
         delete[] pixels;
     }
@@ -421,6 +461,7 @@ void SketchProgram::ParseZoneMap(const std::string& filename)
     }
     else
     {
+        // TODO: Resize image loaded from here to fit screen height/width
         std::string path = "res/zonemaps/" + filename;
         pixels = stbi_load(path.c_str(), &width, &height, &bytes, 0);
     }
@@ -432,7 +473,11 @@ void SketchProgram::ParseZoneMap(const std::string& filename)
 
     // Initialize specific non-sdl data necessary for sketch program function.
     // These all rely on the image size, so allocate after parsing.
-    normalMapPixels = PixelRGB::CreateContiguous2DPixmap(screenHeight, screenWidth);
+    if (!normalPredetermined)
+        normalMapPixels = PixelRGB::CreateContiguous2DPixmap(screenHeight, screenWidth);
+    if (!densityPredetermined)
+        densityMapPixels = PixelRGB::CreateContiguous2DPixmap(screenHeight, screenWidth);
+    
     normalMapColors.resize(screenWidth);
     for (int x = 0; x < screenWidth; x++)
     {
@@ -441,7 +486,7 @@ void SketchProgram::ParseZoneMap(const std::string& filename)
         voronoiZonesByPixel.reserve(screenHeight);
         for (int y = 0; y < screenHeight; y++)
         {
-            DynamicColor* newCol = new DynamicColor(&normalMapPixels[y][x], Vector2D(x, y));
+            DynamicColor* newCol = new DynamicColor(&normalMapPixels[y][x], &densityMapPixels[y][x], Vector2D(x, y));
             temp.push_back(newCol);
         }
         normalMapColors[x].insert(normalMapColors[x].end(), temp.begin(), temp.end());
@@ -488,6 +533,79 @@ void SketchProgram::ParseZoneMap(const std::string& filename)
     pixelsToUpdate.clear();
     pixelsToUpdate.reserve(normalMapColors.size() * normalMapColors[0].size());
     voronoiPoints.clear();
+}
+
+void SketchProgram::InitializeInputMaps(char* normal_name, char* density_name)
+{
+    int width, height, bytes;
+    std::string fileNorm = (normal_name == nullptr) ? "" : "res/normalmaps/" + std::string(normal_name);
+    std::string fileDens = (density_name == nullptr) ? "" : "res/densitymaps/" + std::string(density_name);
+
+    void* temp = stbi_load(fileNorm.c_str(), &width, &height, &bytes, 0);
+    normalMapPixels = PixelRGB::CreateContiguous2DPixmap(screenWidth, screenHeight, true);
+    
+    // Load density map with info if found.
+    if (temp != nullptr && fileNorm != "")
+    {
+        unsigned char* resized = new unsigned char[screenHeight * screenWidth * 3];
+        stbir_resize_uint8(
+            (unsigned char*)temp,
+            width,
+            height,
+            0,
+            resized,
+            screenWidth,
+            screenHeight,
+            0,
+            3
+        );
+
+        for (int x = 0; x < screenWidth; ++x)
+            for (int y = 0; y < screenHeight; ++y)
+            {
+                int index = bytes * (y * screenWidth + x);
+                normalMapPixels[y][x].r = resized[index + 0];
+                normalMapPixels[y][x].g = resized[index + 1];
+                normalMapPixels[y][x].b = resized[index + 2];
+            }
+
+        normalPredetermined = true;
+        delete[] resized;
+    }
+    stbi_image_free(temp);
+
+    // Do same for density map.
+    temp = stbi_load(fileDens.c_str(), &width, &height, &bytes, 0);
+    densityMapPixels = PixelRGB::CreateContiguous2DPixmap(screenWidth, screenHeight, false);
+    if (temp != nullptr && fileNorm != "")
+    {
+        unsigned char* resized = new unsigned char[screenHeight * screenWidth * 3];
+        stbir_resize_uint8(
+            (unsigned char*)temp,
+            width,
+            height,
+            0,
+            resized,
+            screenWidth,
+            screenHeight,
+            0,
+            3
+        );
+
+        for (int x = 0; x < screenWidth; ++x)
+            for (int y = 0; y < screenHeight; ++y)
+            {
+                int index = bytes * (y * screenWidth + x);
+                densityMapPixels[y][x].r = resized[index + 0];
+                densityMapPixels[y][x].g = resized[index + 1];
+                densityMapPixels[y][x].b = resized[index + 2];
+            }
+
+        densityPredetermined = true;
+        delete[] resized;
+    }
+    stbi_image_free(temp);
+
 }
 
 void SketchProgram::LoadDefaultMesh()
@@ -602,10 +720,6 @@ void SketchProgram::EmplaceSketchLine(SketchLine* editLine)
                 normalMapColors[x][y]->UpdatePixelInterp(&pixColor, t);
             }
         }
-
-    // With updated pixel info, recreate texture
-    SDL_DestroyTexture(normalMapTexture);
-    CreateTextureFromPixelData(normalMapTexture, normalMapPixels[0], screenWidth, screenHeight, 3);
 }
 
 void SketchProgram::EmplaceVoronoiPoint(std::shared_ptr<VoronoiPoint>& newPoint, bool updateAffectedBarycentric)
@@ -769,6 +883,7 @@ SketchLine* SketchProgram::DrawSketchLine(bool placePoint)
         {
             int zone = voronoiZonesByPixel[(int)mousePos[0]][(int)mousePos[1]];
             std::shared_ptr<VoronoiPoint> newPoint = std::make_shared<VoronoiPoint>(editLine->Get_Origin(), editLine->Get_RenderColor(), zone);
+            newPoint->Set_RenderColor((densityMode) ? red : black);
             EmplaceVoronoiPoint(newPoint);
             newestPointID = newPoint->Get_ID();
             voronoiPoints[newestPointID] = std::move(newPoint);
@@ -958,9 +1073,6 @@ void SketchProgram::RebuildMapNaive()
     mainVecField->UpdateAll();
         
     std::cout << "Map Rebuilt!\n";
-
-    SDL_DestroyTexture(normalMapTexture);
-    CreateTextureFromPixelData(normalMapTexture, normalMapPixels[0], screenWidth, screenHeight, 3);
 }
 
 void SketchProgram::RecolorSelectedPoints(SketchLine* followLine)
@@ -979,7 +1091,6 @@ void SketchProgram::RecolorSelectedPoints(SketchLine* followLine)
                 if (it->Get_TriNodeA() == nullptr || it->Get_TriNodeB() == nullptr)
                     continue;
 
-                bool found = false;
                 // Pixel should update if it's barcentric blending is involved with the points'
                 // nodes, since those nodes are influenced by the points themselves.
                 for (auto& ptA : it->Get_TriNodeA()->Get_IntersectingPoints())
@@ -987,13 +1098,10 @@ void SketchProgram::RecolorSelectedPoints(SketchLine* followLine)
                     if (selectedPoints.count(ptA->Get_ID()) >= 1)
                     {
                         pixelsToUpdate.push_back(it);
-                        found = true;
-                        break;
+                        continue;
                     }
                 }
 
-                if (found) continue;    // Save some computing time if we know we found a pixel that should update already.
-                
                 for (auto& ptB : it->Get_TriNodeB()->Get_IntersectingPoints())
                 {
                     if (selectedPoints.count(ptB->Get_ID()) >= 1)
@@ -1006,12 +1114,31 @@ void SketchProgram::RecolorSelectedPoints(SketchLine* followLine)
 
     }
 
-    SDL_Color cacheCol = followLine->Get_RenderColor();
-    bool cachePolarity = followLine->Get_Polarity();
-    for (auto& vPt : selectedPoints)
+    // TODO: If NOT density mode, do the below code.
+    // else, loop through each pixel to update, set density pixels' values (all)
+    // to -> lerp between 128 and 255 based on followline length!
+    if (!densityMode)
     {
-        vPt.second->Set_NormalEncoding(cacheCol);
-        vPt.second->Set_Polarity(cachePolarity);
+        SDL_Color cacheCol = followLine->Get_RenderColor();
+        bool cachePolarity = followLine->Get_Polarity();
+        for (auto& vPt : selectedPoints)
+        {
+            vPt.second->Set_NormalEncoding(cacheCol);
+            vPt.second->Set_Polarity(cachePolarity);
+        }
+    }
+    else
+    {
+        // Set density of voronoi point based on followLine's length relative to 
+        // the maximum length for controlling values (represented by white circle at runtime)
+        // Density will range from 0 to 255
+        int cacheVal = followLine->GetPixelValueFromDistance(255, 0);
+        std::cout << cacheVal << "\n";
+        for (auto& vPt : selectedPoints)
+        {
+           
+            vPt.second->Set_VoronoiDensity(cacheVal);
+        }
     }
 
     //for (int x = 0; x < screenWidth; x++)
@@ -1039,37 +1166,57 @@ void SketchProgram::DeleteSelectedPoints()
 void SketchProgram::CreateStitchDiagram()
 {
     std::string densName;
-    std::cout << "Enter density map file name: ";
-    std::cin >> densName;
-    densName = "res/densitymaps/" + densName;
-
-    int width, height, bytes;
-    unsigned char* pixels = stbi_load(densName.c_str(), &width, &height, &bytes, 0);
-    PixelRGB** densityMap = PixelRGB::CreateContiguous2DPixmap(width, height, false);
-
-    if (pixels == nullptr)
+    if (!densityPredetermined)
     {
-        std::cout << "Unable to load image " << densName << "\n";
-        return;
+        std::cout << "Use premade density map from file (Y/N)?\nSelecting \"N\" will use currenly created density channel.";
+        std::cin >> densName;
+        densName.erase(std::remove_if(densName.begin(), densName.end(), isspace), densName.end());
     }
     
-    for (int x = 0; x < width; x++)
-        for (int y = 0; y < height; y++)
-        {
-            int index = bytes * (y * width + x);
+    int width, height, bytes;
+    unsigned char* pixels;
+    PixelRGB** densityMap = nullptr;
 
-            densityMap[x][y].r = static_cast<unsigned char>(pixels[index]);
-            densityMap[x][y].g = static_cast<unsigned char>(pixels[index + 1]);
-            densityMap[x][y].b = static_cast<unsigned char>(pixels[index + 2]);
+    if (densName == "Y" || densName == "y")
+    {
+        std::cout << "Enter density map file name: ";
+        std::cin >> densName;
+        densName = "res/densitymaps/" + densName;
+
+        pixels = stbi_load(densName.c_str(), &width, &height, &bytes, 0);
+        densityMap = PixelRGB::CreateContiguous2DPixmap(width, height, false);
+
+        if (pixels == nullptr)
+        {
+            std::cout << "Unable to load image " << densName << "\n";
+            return;
         }
 
-    std::unique_ptr<StitchResult> res = std::make_unique<StitchResult>(screenWidth, screenHeight, width, height, normalMapPixels, densityMap);
+        for (int x = 0; x < width; x++)
+            for (int y = 0; y < height; y++)
+            {
+                int index = bytes * (y * width + x);
+
+                densityMap[x][y].r = static_cast<unsigned char>(pixels[index]);
+                densityMap[x][y].g = static_cast<unsigned char>(pixels[index + 1]);
+                densityMap[x][y].b = static_cast<unsigned char>(pixels[index + 2]);
+            }
+    }
+    else
+    {
+        width = 100;
+        height = 100;
+        bytes = 3;
+    }
+
+    std::unique_ptr<StitchResult> res = std::make_unique<StitchResult>(screenWidth, screenHeight, width, height, normalMapPixels, (densityMap == nullptr) ? densityMapPixels : densityMap);
     if (res->CreateStitches(true))
     {
         stitchResults.push_back(std::move(res));
     }
     
-    PixelRGB::DeleteContiguous2DPixmap(densityMap);
+    if (densityMap != nullptr)
+        PixelRGB::DeleteContiguous2DPixmap(densityMap);
 }
 
 // ---- Getters/Setters --- //

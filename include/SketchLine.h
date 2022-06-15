@@ -14,16 +14,22 @@ class SketchLine
 {
 public:
 
+	static const int maxBlueDist;
+	static const int maxBlueDistSqr;
+	static const int defaultColorDist;
+	static const int defaultColorDistSqr;
+
 	SketchLine(const Vector2D& start, const Vector2D& end);
 	~SketchLine();
 	
-	void RenderLine(SDL_Renderer* rend);	
+	void RenderLine(SDL_Renderer* rend, bool drawCircle = false);	
 	void UpdateColor();
 	void SetStartPoint(const Vector2D& start);
 	void SetEndPoint(const Vector2D& end);
 	void SetColorMode(bool enableBlue);
 	void SetPolarity(bool pol);
 	void FlipPolarity();
+	Uint8 GetPixelValueFromDistance(int min, int max);
 
 	bool Get_Polarity();			// True = postive X half of normal map color wheel, False = negative X
 	float Get_Magnitude();			// Length of line.
@@ -35,10 +41,7 @@ public:
 
 private:
 
-	static int maxBlueDist;
-	static int maxBlueDistSqr;
-	static int defaultColorDist;
-	static int defaultColorDistSqr;
+	
 
 	bool blueSetMode = false;
 	bool positivePolarity = true;

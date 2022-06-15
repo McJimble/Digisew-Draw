@@ -4,9 +4,10 @@
 
 float DynamicColor::edgeThreshold = 0.99f;
 
-DynamicColor::DynamicColor(PixelRGB* affectedPixel, const Vector2D& position)
+DynamicColor::DynamicColor(PixelRGB* affectedPixel, PixelRGB* densityPixel, const Vector2D& position)
 {
     this->affectedPixel     = affectedPixel;
+    this->densityPixel      = densityPixel;
     this->pixPosition       = position;
     this->voronoiDensity    = 1.0f;
     this->voronoiZone       = 0;
@@ -14,8 +15,6 @@ DynamicColor::DynamicColor(PixelRGB* affectedPixel, const Vector2D& position)
 
 DynamicColor::~DynamicColor()
 {
-    //potentialColors.clear();
-    affectedPixel = nullptr;
 }
 
 void DynamicColor::UpdatePixel()
@@ -30,9 +29,8 @@ void DynamicColor::UpdatePixel()
     //PixelRGB black = PixelRGB::MakePixel(0, 0, 0);
     //PixelRGB::CopyData((voronoiDensity > edgeThreshold) ? &black : affectedPixel, affectedPixel);
 
-    //DensityToLuminosity();
-    //DensityToColor();
     BarycentricToColor();
+    BarycentricToDensity();
 }
 
 bool DynamicColor::TryAddMinPoint(const std::shared_ptr<VoronoiPoint>& newPoint)
@@ -107,6 +105,21 @@ void DynamicColor::BarycentricToColor()
     affectedPixel->r = (Uint8)additiveColor[0];
     affectedPixel->g = (Uint8)additiveColor[1];
     affectedPixel->b = (Uint8)additiveColor[2];
+}
+
+// I know this could just be added in the same function as above, 
+// but I split to two just in case it was helpful.
+void DynamicColor::BarycentricToDensity()
+{
+    if (!minPt || !triNodeA || !triNodeB) return; // For sanity
+    float densMin = minPt->Get_VoronoiDensity();
+    float densA = triNodeA->Get_AverageDensity();
+    float densB = triNodeB->Get_AverageDensity();
+
+    float addAverage = Helpers::Clamp(baryU * densMin + baryV * densA + baryW * densB, 0, 255);
+    densityPixel->r = (Uint8)addAverage;
+    densityPixel->g = densityPixel->r;
+    densityPixel->b = densityPixel->r;
 }
 
 void DynamicColor::SetVoronoiZone(int newZoneID)

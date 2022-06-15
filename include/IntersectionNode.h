@@ -27,12 +27,16 @@ public:
 	// Forces node to update its color based on current values of connected points
 	void UpdateColor();
 
+	// Foroces node to update DENSITY based on connected positions.
+	void UpdateDensity();
+
 	// Render where the intersection node is (currently just for debugging purposes.
 	void RenderNode(SDL_Renderer* rend);
 
 	int Get_ID() const;
 	int Get_VoronoiZone() const;
 	const Vector2D& Get_Position() const;
+	const float Get_AverageDensity() const;
 	const PixelRGB& Get_AverageColor() const;
 	const std::vector<VoronoiPoint*>& Get_IntersectingPoints() const;
 
@@ -48,5 +52,7 @@ private:
 	int identifier;
 	int voronoiZone;
 	Vector2D position;
+
+	float averageDensity;
 	PixelRGB averageColor;
 };

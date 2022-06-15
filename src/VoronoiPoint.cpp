@@ -6,6 +6,7 @@ int VoronoiPoint::nextID = 0;
 
 VoronoiPoint::VoronoiPoint(const Vector2D& position, const PixelRGB& normalEncoding, int zone)
 {
+	this->voronoiDensity	= 128;
 	this->normalEncoding	= normalEncoding;
 	this->position			= position;
 	this->zoneIndex			= zone;
@@ -16,6 +17,7 @@ VoronoiPoint::VoronoiPoint(const Vector2D& position, const PixelRGB& normalEncod
 
 VoronoiPoint::VoronoiPoint(const Vector2D& position, const SDL_Color& normalEncoding, int zone)
 {
+	this->voronoiDensity = 128;
 	this->normalEncoding.r = normalEncoding.r;
 	this->normalEncoding.g = normalEncoding.g;
 	this->normalEncoding.b = normalEncoding.b;
@@ -29,7 +31,12 @@ VoronoiPoint::VoronoiPoint(const Vector2D& position, const SDL_Color& normalEnco
 
 void VoronoiPoint::RenderPoint(SDL_Renderer* rend)
 {
-	SDL_SetRenderDrawColor(rend, renderColor.r, renderColor.g, renderColor.b, renderColor.a);
+	this->RenderPoint(rend, renderColor);
+}
+
+void VoronoiPoint::RenderPoint(SDL_Renderer* rend, const SDL_Color& overrideColor)
+{
+	SDL_SetRenderDrawColor(rend, overrideColor.r, overrideColor.g, overrideColor.b, overrideColor.a);
 	for (int x = -pixelRadius; x < pixelRadius; x++)
 		for (int y = -pixelRadius; y < pixelRadius; y++)
 		{
@@ -137,6 +144,11 @@ const Vector2D& VoronoiPoint::Get_Position() const
 	return position;
 }
 
+const Uint8 VoronoiPoint::Get_VoronoiDensity() const
+{
+	return voronoiDensity;
+}
+
 const PixelRGB& VoronoiPoint::Get_NormalEncoding() const
 {
 	return normalEncoding;
@@ -155,6 +167,17 @@ void VoronoiPoint::Set_Polarity(bool pol)
 void VoronoiPoint::Set_VoronoiZone(int zone)
 {
 	zoneIndex = zone;
+}
+
+void VoronoiPoint::Set_VoronoiDensity(const Uint8 newDens)
+{
+	voronoiDensity = newDens;
+	
+	// Signal to nodes that density is updated.
+	for (auto& node : neighboringNodes)
+	{
+		node->UpdateDensity();
+	}
 }
 
 void VoronoiPoint::Set_NormalEncoding(const SDL_Color& normalEncoding)

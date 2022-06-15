@@ -1,11 +1,12 @@
 #include "SketchLine.h"
+#include "Helpers.h"
 #include <iostream>
 
 // Chache sqr. distances for faster calculations. Actual dist. to check is 200 pixels.
-int SketchLine::maxBlueDist = 200;
-int SketchLine::maxBlueDistSqr = SketchLine::maxBlueDist * SketchLine::maxBlueDist;
-int SketchLine::defaultColorDist = 10;
-int SketchLine::defaultColorDistSqr = SketchLine::defaultColorDist * SketchLine::defaultColorDist;
+const int SketchLine::maxBlueDist = 100;
+const int SketchLine::maxBlueDistSqr = SketchLine::maxBlueDist * SketchLine::maxBlueDist;
+const int SketchLine::defaultColorDist = 10;
+const int SketchLine::defaultColorDistSqr = SketchLine::defaultColorDist * SketchLine::defaultColorDist;
 
 SketchLine::SketchLine(const Vector2D& start, const Vector2D& end)
 {
@@ -17,9 +18,10 @@ SketchLine::SketchLine(const Vector2D& start, const Vector2D& end)
 	startPosRect.x = startPos[0] - (defaultColorDist * 0.5);
 	startPosRect.y = startPos[1] - (defaultColorDist * 0.5);
 
+	// Rect in case we want to draw rects using these values...
 	maxRadiusRect.w = maxRadiusRect.h = maxBlueDist;
-	maxRadiusRect.x = startPos[0] - (maxBlueDist * 0.5);
-	maxRadiusRect.y = startPos[1] - (maxBlueDist * 0.5);
+	maxRadiusRect.x = startPos[0];// -(maxBlueDist * 0.5); <- if using for rect, change this.
+	maxRadiusRect.y = startPos[1];// -(maxBlueDist * 0.5);
 
 	// Making default normal color for now; temporary?
 	Helpers::NormalMapDefaultColor(&rendColor);
@@ -30,13 +32,13 @@ SketchLine::~SketchLine()
 
 }
 
-void SketchLine::RenderLine(SDL_Renderer* rend)
+void SketchLine::RenderLine(SDL_Renderer* rend, bool drawCircle)
 {
 	SDL_SetRenderDrawColor(rend, 255, 255, 255, 255);
 	SDL_RenderFillRect(rend, &startPosRect);
 
-	if (blueSetMode)
-		SDL_RenderDrawRect(rend, &maxRadiusRect);
+	if (blueSetMode || drawCircle)
+		Helpers::SDL_DrawCircle(rend, maxRadiusRect.x, maxRadiusRect.y, maxRadiusRect.w);
 
 	// In blue set mode, render with just varying blue channel so the line is easier to
 	// see. The actual render color used in setting voronoi colors is unchanged though.
@@ -46,19 +48,15 @@ void SketchLine::RenderLine(SDL_Renderer* rend)
 
 void SketchLine::UpdateColor()
 {
-	if ((endPos - startPos).SqrMagnitude() < defaultColorDistSqr)
-	{
-		Helpers::NormalMapDefaultColor(&rendColor);
-	}
-	else if (blueSetMode)
+	if (blueSetMode)
 	{
 		rendColor.r = restoreR;
 		rendColor.g = restoreG;
-		float len = (endPos - startPos).SqrMagnitude();
-		float t = Helpers::InverseLerp(0, maxBlueDistSqr, len);
-		t = Helpers::Clamp(t, 0.0f, 1.0f);
-
-		rendColor.b = (Helpers::Lerp(128, 255, t));
+		rendColor.b = GetPixelValueFromDistance(128, 255);
+	}
+	else if ((endPos - startPos).SqrMagnitude() < defaultColorDistSqr)
+	{
+		Helpers::NormalMapDefaultColor(&rendColor);
 	}
 	else
 	{
@@ -67,7 +65,7 @@ void SketchLine::UpdateColor()
 		restoreG = rendColor.g;
 	}
 
-	std::cout << (int)rendColor.r << ", " << (int)rendColor.g << "\n";
+	std::cout << (int)rendColor.r << ", " << (int)rendColor.g  << ", " << (int)rendColor.b << "\n";
 }
 
 void SketchLine::SetStartPoint(const Vector2D& start)
@@ -95,6 +93,15 @@ void SketchLine::SetPolarity(bool pol)
 void SketchLine::FlipPolarity()
 {
 	positivePolarity = !positivePolarity;
+}
+
+Uint8 SketchLine::GetPixelValueFromDistance(int minVal = 0, int maxVal = 255)
+{
+	float len = (endPos - startPos).SqrMagnitude();
+	float t = Helpers::InverseLerp(0, maxBlueDistSqr, len);
+	t = Helpers::Clamp(t, 0.0f, 1.0f);
+
+	return Helpers::Lerp(minVal, maxVal, t);
 }
 
 bool SketchLine::Get_Polarity()

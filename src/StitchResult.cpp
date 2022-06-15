@@ -8,10 +8,8 @@
 
 int StitchResult::resultID = 0;
 
-// These were globals in the legacy stitch code, and would cause an ungodly
-// amount of rework to avoid using them this way... 
-// (don't use globals in generic function pointers! Might have been fine in that 2000-line
-// unorganized mess of classless code, but not for me. )
+// These were globals in the legacy stitch code, gotta carry it over the same way
+// to avoid a ton of unnecessary refactoring.
 float alpha1 = 1.4f;
 float alpha2 = 2.2f;
 float beta1 = 2.05f;
@@ -34,9 +32,7 @@ StitchResult::StitchResult(int w, int h, int wn, int hn, PixelRGB**& normalMap, 
     {
         for (int y = 0; y < hn; ++y)
         {
-            const PixelRGB& denP = densityMap[x][y];
             const PixelRGB& pix = normalMap[(int)xf][(int)yf];  // Cached for speed
-            densityMapImg->setpixel(hn - y - 1, x, pixel(denP.r, denP.g, denP.b, 255));
             normalMapImg->setpixel(hn - y - 1, x, pixel(pix.r, pix.g, pix.b, 255));
 
             yf = Helpers::Clamp(yf + incrementY, 0, h - 1);
@@ -45,7 +41,26 @@ StitchResult::StitchResult(int w, int h, int wn, int hn, PixelRGB**& normalMap, 
         // Increment scale values
         xf = Helpers::Clamp(xf + incrementX, 0, w - 1);
         yf = 0.01f;
-        std::cout << xf << ", " << yf << "\n";
+    }
+
+    // Do same for density, but using reciprocal increment.
+    incrementX = (float)wn / w;
+    incrementY = (float)hn / h;
+    xf = 0.01f;
+    yf = 0.01f;
+    for (int x = 0; x < w; ++x)
+    {
+        for (int y = 0; y < h; ++y)
+        {
+            const PixelRGB& denP = densityMap[y][x];
+            densityMapImg->setpixel(hn - (int)yf - 1, wn - (int)xf - 1, pixel(denP.r, denP.g, denP.b, 255));
+
+            yf = Helpers::Clamp(yf + incrementY, 0, h - 1);
+        }
+
+        // Increment scale values
+        xf = Helpers::Clamp(xf + incrementX, 0, w - 1);
+        yf = 0.01f;
     }
 }
 
@@ -89,7 +104,8 @@ float cost2(vec2& u, vec2& v, vec2& w) {
     float distance = glm::length(w - v);
     // float distance = abs(w.x - v.x) + abs(w.y - v.y);
 
-    result = -pow(alpha2, -distance) * beta1 * pow(beta2, -cosangle);
+    //result = -pow(alpha2, -distance) * beta1 * pow(beta2, -cosangle);
+    result = -pow(alpha2, -distance) * pow(beta2, -cosangle);
     return result;
 }
 
@@ -181,8 +197,8 @@ bool StitchResult::CreateStitches(bool createWindow)
             if (fabs(w - scr) < diff) {
                 // update
                 diff = fabs(w - scr);
-                alpha1 = a1; beta1 = b1;
-                alpha2 = a2; beta2 = b2;
+                //alpha1 = a1; beta1 = b1;
+                //alpha2 = a2; beta2 = b2;
                 // update blend
                 bw = w;
             }
@@ -277,6 +293,7 @@ bool StitchResult::CreateStitches(bool createWindow)
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderFillRect(renderer, NULL);
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+
     for (int i = 0; i < graph.size(); i += 1) {
         // read consecutive points to draw edge
         float x1 = graph[i].u.x;
@@ -354,18 +371,21 @@ bool StitchResult::CreateStitches(bool createWindow)
         }
 
     // run lib emb convert
-    char command[50];
+    char command[100];
+    std::string outputName = "output/dst/" + dstName.substr(0, dstName.find(".csv")) + ".dst";
+    std::cout << outputName << std::endl;
 
     sprintf_s(command,
-        "./libembroidery-convert %s %s",
+        "libembroidery-convert.exe %s %s",
         dstName.c_str(),
-        (dstName.substr(0, dstName.find(".csv")) + ".dst").c_str());
+        outputName.c_str());
 
     // system call
     // I don't like this, but for Windows there really is no easy way to do this
     // in the same fashion as the legacy Linux stitching code. If speed/security
     // becomes a problem in the future for converting the embroidery files, this
     // needs to be changed !!
+    // - James
     system(command);
 
     return true;

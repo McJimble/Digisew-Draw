@@ -39,7 +39,7 @@ public:
 	/*
 	 *	Initializes window, sdl, opengl, etc.
 	 */
-	void Initialize();
+	void Initialize(int argc = 0, char** argv = nullptr);
 
 	/*
 	 *	Begins main program loop. Call Initialize() and then this function,
@@ -74,6 +74,7 @@ private:
 	int screenWidth, screenHeight;	// Size of window
 
 	PixelRGB** normalMapPixels;													// Actual pixels displayed on texture.
+	PixelRGB** densityMapPixels;
 	SDL_Texture* normalMapTexture;												// Texture being displayed/changed in background.
 	std::vector<std::vector<DynamicColor*>> normalMapColors;					// Colors being sent by normal map sketches
 	std::vector<DynamicColor*> pixelsToUpdate;									// Pixels that will be updated this frame.
@@ -103,6 +104,12 @@ private:
 	bool enableDeletion = false;			// Can nodes be deleted with mouse instead
 	bool enablePersistentSelection = false;	// When true, selected points are not removed from list if not selected.
 	bool pointPositionsDirty = false;		// Have point positions been moved and should therefore refresh the map?
+	
+	bool densityMode = false;				// Is density mode currently active (only density changes, not colors)?
+	bool normalPredetermined = false;		// Was normal map pulled from file at start of program?
+	bool densityPredetermined = false;		// Was density map pulled from file at start of program?
+
+
 	Vector2D mousePos;						// Cached position of mouse in screen space.
 	Vector2D prevMousePos;					// Mouse position of previous frame; used to displace things with mouse movement.
 	SDL_Rect selectRect;
@@ -111,6 +118,7 @@ private:
 
 	SDL_Color black = { 0, 0, 0, 255 };
 	SDL_Color white = { 255, 255, 255, 255 };
+	SDL_Color red = { 255, 0, 0, 255 };
 
 	/*
 	 *	For performing a complete program loop that polls input, updates, and renders in real time.  
@@ -125,6 +133,11 @@ private:
 	 *  Calling will reset and reallocate the voronoi map.
 	 */
 	void ParseZoneMap(const std::string& filename = "");
+
+	/*
+	 * 
+	 */
+	void InitializeInputMaps(char* normal_name, char* density_name);
 
 	/*
 	 *	Creates a default mesh containing 10 rows and columns of evently spaced voronoiPoints.
@@ -199,6 +212,10 @@ private:
 	 *	containing final stitch output using the normal map at the state it's in
 	 */
 	void CreateStitchDiagram();
+
+	/* Quick helper functions to determine if use is allowed to edit voronoi in certain mode*/
+	bool CanEditNormals() { return !densityMode && !normalPredetermined; };
+	bool CanEditDensity() { return densityMode && !densityPredetermined; };
 
 	int Get_ScreenHeight();
 	int Get_ScreenWidth();

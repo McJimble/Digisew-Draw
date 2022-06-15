@@ -19,7 +19,7 @@ class DynamicColor
 
 public:
 
-	DynamicColor(PixelRGB* affectedPixel, const Vector2D& position);
+	DynamicColor(PixelRGB* affectedPixel, PixelRGB* densityPixel, const Vector2D& position);
 	~DynamicColor();
 
 	/*
@@ -85,8 +85,9 @@ private:
 	// Zone this pixel inside of. Only voronoi points that match this zone can be added.
 	int voronoiZone;
 
-	// Reference to RGB pixel this will modify.
-	PixelRGB* affectedPixel;
+	
+	PixelRGB* affectedPixel;		// Reference to RGB pixel this will modify.
+	PixelRGB* densityPixel;			// Reference to RGB pixel that will copy BLUE channel of the above pixel at all times.
 	 
 	// Position of pixel on screen (float converted)
 	Vector2D pixPosition;
@@ -104,6 +105,8 @@ private:
 	// Change the affected pixel's value based on the current barycentric coordinates
 	// the pixel has within a triangle formed by voronoi points / nodes.
 	void BarycentricToColor();
+
+	void BarycentricToDensity();
 };
 
 

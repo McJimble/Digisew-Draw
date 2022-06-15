@@ -106,6 +106,13 @@ public:
 	 *  always lies between min and max.
 	 */
 	static float Clamp(float val, float min, float max);
+
+	/*
+	 *  Uses SDL_DrawPoint function to draw an unfilled circle. Doesn't account for render color.
+	 *  Pulled directly from here: https://stackoverflow.com/a/48291620
+	 */
+	static void SDL_DrawCircle(SDL_Renderer* renderer, int32_t centreX, int32_t centreY, int32_t radius);
+	
 };
 
 #endif
