@@ -21,7 +21,7 @@ public:
 	 *	Initializes all vectors in the field with a dynamic color that they will read the values of when updated.
 	 *	A vector will pick the closest screen space pixel to its position.
 	 */
-	void InitializeVectors(const std::vector<std::vector<DynamicColor*>>& pixmap, float lineLengths = 5.0f);
+	void InitializeVectors(PixelRGB**& pixmap, int pixelsX, int pixelsY, float lineLengths = 5.0f);
 
 	/*
 	 *	Updates all vectors in the vector field at once based on r & g values found

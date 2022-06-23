@@ -2,7 +2,7 @@
 #include "Helpers.h"
 
 #include <iostream>
-FieldLine::FieldLine(DynamicColor* colorToRead, const Vector2D& pos, float length)
+FieldLine::FieldLine(const PixelRGB* colorToRead, const Vector2D& pos, float length)
 {
 	this->colorToRead	= colorToRead;
 	this->position		= pos;
@@ -20,14 +20,11 @@ void FieldLine::UpdateLine()
 	// Don't update if we have no color to update with.
 	if (!colorToRead) return;
 
-	const PixelRGB* readThisFrame = colorToRead->Get_AffectedPixel();
-	Vector2D voronoiPos = colorToRead->Get_MinPoint()->Get_Position();
-
 	//direction = Helpers::HalfNormalColorToDirection(readThisFrame->r, readThisFrame->g, colorToRead->Get_MinPoint()->Get_PolaritySwapped());
-	direction = Vector2D(Helpers::InverseLerp(128.0f, 255.0f, readThisFrame->r), -Helpers::InverseLerp(128.0f, 255.0f, readThisFrame->g)).Get_Normalized();
-	length = (Helpers::InverseLerp(255, 128, readThisFrame->b)) * initialLength;
+	direction = Vector2D(Helpers::InverseLerp(128.0f, 255.0f, colorToRead->r), -Helpers::InverseLerp(128.0f, 255.0f, colorToRead->g)).Get_Normalized();
+	length = (Helpers::InverseLerp(255, 128, colorToRead->b)) * initialLength;
 
-	if (readThisFrame->r == 128 && readThisFrame->g == 128)
+	if (colorToRead->r == 128 && colorToRead->g == 128)
 	{
 		direction = Vector2D(0.0f, 0.0f);
 	}

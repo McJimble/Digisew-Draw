@@ -1,9 +1,11 @@
 #include "SketchProgram.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include "stb/stb_image.h"
-#include "stb/stb_image_resize.h"
+
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <iostream>
 
 #define SHOW_FPS
 
@@ -30,31 +32,20 @@ void SketchProgram::Initialize(int argc, char** argv)
         std::cout << "SDL failed to get user's main display information.\n" << SDL_GetError();
     }
 
-    // Hard-coding these here for now. Will probably be more dynamic in the future.
-    screenHeight = DEF_SCREEN_HEIGHT;
-    screenWidth = DEF_SCREEN_WIDTH;
+    std::string paramsName = "res/params/start_params.txt";
+    if (argc >= 2)
+        paramsName = std::string(argv[1]);
 
-    InitializeInputMaps((argc >= 2) ? argv[1] : nullptr, (argc >= 3) ? argv[2] : nullptr);
+    ReadParameters(paramsName.c_str());
 
-    // Parse with default texture for now
-    // TODO: Uncomment the below code, force zone map to be resized to
-    // screen size dimensions, then fix how zones/regions work (They don't yet).
-    std::string filename;
+    screenWidth = pWidth;
+    screenHeight = pHeight;
+
+    ParseZoneMap(zoneMapName);
+
     std::string userInput;
-    /*std::cout << "Would you like to use a custom zone image? (Y/N)\n";
+    std::cout << "Start with default square mesh? (Y/N)\n";
     std::cin >> userInput;
-    if (userInput == "Y" || userInput == "y")
-    {
-        std::cout << "Enter file name for region image:\n";
-        std::cin >> filename;
-    }*/
-    ParseZoneMap(filename);
-
-    if (!normalPredetermined)
-    {
-        std::cout << "Start with default square mesh? (Y/N)\n";
-        std::cin >> userInput;
-    }
 
     if (userInput == "Y" || userInput == "y")
     {
@@ -63,11 +54,11 @@ void SketchProgram::Initialize(int argc, char** argv)
     }
 
     // Arbitrary default values.
-    fieldX = 32;
-    fieldY = 18;
+    fieldX = 32 * pVectorFieldDensityFac;
+    fieldY = 18 * pVectorFieldDensityFac;
     fieldPadding = 15;
     mainVecField = std::make_unique<VectorField>(fieldX, fieldY, fieldPadding, SDL_Color {0, 0, 0, 255});
-    mainVecField->InitializeVectors(normalMapColors, 20);
+    mainVecField->InitializeVectors(normalMapPixels, screenWidth, screenHeight, 20);
 
     // Create window and renderer
     window = (SDL_CreateWindow(WINDOW_NAME,
@@ -79,6 +70,11 @@ void SketchProgram::Initialize(int argc, char** argv)
     renderer = SDL_CreateRenderer(window, -1, 0);
 
     CreateTextureFromPixelData(normalMapTexture, normalMapPixels[0], screenWidth, screenHeight, 3);
+
+    for (auto& layer : layers)
+        layer->UpdateLayerAll(false);
+
+    mainVecField->UpdateAll();
 
     std::cout << "Ready to draw!\n";
 }
@@ -182,7 +178,7 @@ void SketchProgram::PollEvents()
             else if (pressedKey == SDLK_f)
             {
                 if (sketchLines.empty()) continue;
-                
+                std::cout << sketchLines.size() << std::endl;
                 sketchLines.back()->FlipPolarity();
 
                 for (auto& pt : selectedPoints)
@@ -211,14 +207,6 @@ void SketchProgram::PollEvents()
 
 void SketchProgram::Update()
 {
-    if (!(CanEditNormals() || CanEditDensity()))
-    {
-        void* pixelsToDisplay = (densityMode) ? densityMapPixels[0] : normalMapPixels[0];
-        SDL_DestroyTexture(normalMapTexture);
-        CreateTextureFromPixelData(normalMapTexture, pixelsToDisplay, screenWidth, screenHeight, 3);
-        return;
-    }
-
     const Uint8* keys = SDL_GetKeyboardState(NULL);
     enableDeletion = keys[SDL_SCANCODE_E];
     enablePersistentSelection = keys[SDL_SCANCODE_LSHIFT];
@@ -241,7 +229,10 @@ void SketchProgram::Update()
     {
         // Cancel prev. left mouse actions if right mouse clicked;
         if (leftMouseDownLastFrame)
-            pixelsToUpdate.clear();
+        {
+            for (auto& layer : layers)
+                layer->CancelUpdate();
+        }
         
         if (!rightMouseDownLastFrame)
             initSelectionPoint = mousePos;
@@ -277,9 +268,6 @@ void SketchProgram::Update()
 
         if (leftMouseHeld)
         {
-            // TODO: Track which maps were pulled from a file.
-            // If one of those are selected, don't do anything since editting is
-            // not allowed in that instance.
             if (selectedPoints.empty())
             {
                 DrawSketchLine(true);
@@ -291,14 +279,13 @@ void SketchProgram::Update()
 
             // Update all pixels that are set to be updated this frame (typically because
             // they are being editted by a newly placed VoronoiPoint)
-            for (auto& pix : pixelsToUpdate)
-            {
-                pix->UpdatePixel();
-            }
+            for (auto& layer : layers)
+                layer->UpdateQueuedPixels();
         }
         else
         {
-            pixelsToUpdate.clear();
+            for (auto& layer : layers)
+                layer->CancelUpdate();
         }
     }
 
@@ -316,35 +303,14 @@ void SketchProgram::Render()
     // Currently, background texture is same size as window which cannot be resized.
     SDL_RenderCopy(renderer, normalMapTexture, NULL, NULL);
 
-    // If in normal mode but a pre-made map was pulled in, do no extra rendering,
-    // just the texture based the mode.
-    if (!(CanEditNormals() || CanEditDensity()))
-    {
-        SDL_RenderPresent(renderer);
-        return;
-    }
-
     if (!sketchLines.empty() && leftMouseDownLastFrame)
     {
         sketchLines.back()->RenderLine(renderer, densityMode);
     }
 
-    for (auto& pt : voronoiPoints)
+    for (auto& layer : layers)
     {
-        pt.second->RenderPoint(renderer);
-    }
-
-    if (debugDisplay)
-    {
-        for (auto& pt : voronoiPoints)
-        {
-            pt.second->RenderFormedTriangles(renderer);
-        }
-
-        for (auto& node : createdNodes)
-        {
-            node.second->RenderNode(renderer);
-        }
+        layer->RenderLayer(renderer, debugDisplay);
     }
 
     mainVecField->Render(renderer);
@@ -361,9 +327,9 @@ void SketchProgram::Render()
 
 void SketchProgram::Quit()
 {
-    normalMapColors.clear();
     sketchLines.clear();
-    createdNodes.clear();
+    layers.clear();
+    
     PixelRGB::DeleteContiguous2DPixmap(normalMapPixels);
     PixelRGB::DeleteContiguous2DPixmap(densityMapPixels);
 
@@ -442,79 +408,124 @@ void SketchProgram::SaveColorMap(std::string& filename, int winID)
     }
 }
 
+void SketchProgram::ReadParameters(const char* paramFile)
+{
+    // Read all paramters.
+    std::ifstream pFile(paramFile);
+    std::stringstream buffer;
+    buffer << pFile.rdbuf();
+
+    std::string fileStr = buffer.str();
+    std::vector<std::string> args;
+    std::string item;
+
+    char delim = ' ';
+    std::stringstream ss(fileStr);
+    while (std::getline(ss, item, delim)) {
+        args.push_back(item);
+        delim = (delim == ' ') ? '\n' : ' ';
+    }
+
+    // Every odd
+    pWidth = std::stoi(args[1]);
+    pHeight = std::stoi(args[3]);
+    pVectorFieldDensityFac = std::stod(args[5]);
+    defaultNormalMap = args[7];
+    defaultDensityMap = args[9];
+    zoneMapName = args[11];
+
+    // Print parameters so the user can verify they are what they wanted.
+    std::cout << "Initializing with the following parameters: \n";
+    std::cout << "Screen width: " << pWidth << "\n";
+    std::cout << "Screen height: " << pHeight << "\n";
+    std::cout << "Vector field density factor: " << pVectorFieldDensityFac << "\n";
+    std::cout << "Static normal map: " << defaultNormalMap << "\n";
+    std::cout << "Static density map: " << defaultDensityMap << "\n";
+    std::cout << "Zone map: " << zoneMapName << "\n";
+}
+
 void SketchProgram::ParseZoneMap(const std::string& filename)
 {
     int width, height, bytes;
     unsigned char* pixels;
-    if (filename.empty())
+
+    std::string path = "res/zonemaps/" + filename;
+    pixels = stbi_load(path.c_str(), &width, &height, &bytes, 0);
+
+    if (pixels == nullptr || filename.empty())
     {
-        width = DEF_SCREEN_WIDTH;
-        height = DEF_SCREEN_HEIGHT;
+        std::cout << "Invalid or no zone file given. Using one layer across screen.\n";
+        width = std::min(1920, screenWidth);
+        height = std::min(1920, screenHeight);
         bytes = 3;
 
         long totalLen = bytes * width * height;
         pixels = new unsigned char[totalLen];
-        for (long i = 0; i < totalLen; i++)
+        for (long i = 0; i < totalLen; i += 3)
         {
-            pixels[i] = 0;
+            pixels[i] = 128;
+            pixels[i + 1] = 128;
+            pixels[i + 2] = 255;
         }
     }
     else
     {
-        // TODO: Resize image loaded from here to fit screen height/width
-        std::string path = "res/zonemaps/" + filename;
-        pixels = stbi_load(path.c_str(), &width, &height, &bytes, 0);
-    }
+        // Scale pixels read to fit screen size.
+        float xInc = (float)width / screenWidth;
+        float yInc = (float)height / screenHeight;
 
-    // Clamp screen size within typical monitor size for now, since
-    // image scaling is not implemented.
-    screenWidth = std::min(1920, width);
-    screenHeight = std::min(1080, height);
+        unsigned char* srcPixels = pixels;
+        pixels = new unsigned char[screenWidth * screenHeight * 3];
 
-    // Initialize specific non-sdl data necessary for sketch program function.
-    // These all rely on the image size, so allocate after parsing.
-    if (!normalPredetermined)
-        normalMapPixels = PixelRGB::CreateContiguous2DPixmap(screenHeight, screenWidth);
-    if (!densityPredetermined)
-        densityMapPixels = PixelRGB::CreateContiguous2DPixmap(screenHeight, screenWidth);
-    
-    normalMapColors.resize(screenWidth);
-    for (int x = 0; x < screenWidth; x++)
-    {
-        std::vector<DynamicColor*> temp;
-        temp.reserve(screenHeight);
-        voronoiZonesByPixel.reserve(screenHeight);
-        for (int y = 0; y < screenHeight; y++)
+        float approxX = 0.0f;
+        for (int x = 0; x < screenWidth; ++x, approxX += xInc)
         {
-            DynamicColor* newCol = new DynamicColor(&normalMapPixels[y][x], &densityMapPixels[y][x], Vector2D(x, y));
-            temp.push_back(newCol);
+            float approxY = 0.0f;
+            for (int y = 0; y < screenHeight; ++y, approxY += yInc)
+            {
+                int indexNew = 3 * (y * screenWidth + x);
+                int indexOld = bytes * ((int)approxY * width + (int)approxX);
+                pixels[indexNew] = srcPixels[indexOld];
+                pixels[indexNew + 1] = srcPixels[indexOld + 1];
+                pixels[indexNew + 2] = srcPixels[indexOld + 2];
+            }
         }
-        normalMapColors[x].insert(normalMapColors[x].end(), temp.begin(), temp.end());
+
+        stbi_image_free(srcPixels);
     }
 
     // NOW we read raw image data, and set zone information.
-    std::vector<PixelRGB*> uniqueColors;
+    std::vector<PixelRGB> uniqueColors;
     voronoiZonesByPixel.resize(screenWidth);
+    PixelRGB whitePix = PixelRGB {255, 255, 255};
     for (int x = 0; x < screenWidth; x++)
     {
         voronoiZonesByPixel[x].resize(screenHeight);
         for (int y = 0; y < screenHeight; y++)
         {
-            int index = bytes * (y * width + x);
-            PixelRGB* currPixel = new PixelRGB();
+            int index = bytes * (y * screenWidth + x);
+            PixelRGB currPixel = PixelRGB();
+            Uint8 alpha;
 
-            currPixel->r = static_cast<unsigned char>(pixels[index]);
-            currPixel->g = static_cast<unsigned char>(pixels[index + 1]);
-            currPixel->b = static_cast<unsigned char>(pixels[index + 2]);
+            currPixel.r = static_cast<unsigned char>(pixels[index]);
+            currPixel.g = static_cast<unsigned char>(pixels[index + 1]);
+            currPixel.b = static_cast<unsigned char>(pixels[index + 2]);
+            alpha = (bytes >= 4) ? static_cast<unsigned char>(pixels[index + 3]) : 255;
 
             bool isNewColor = true;
+
+            if (PixelRGB::Equals(&currPixel, &whitePix) || alpha == 0)
+            {
+                voronoiZonesByPixel[x][y] = 0;
+                continue;
+            }
+
             for (int i = 0; i < uniqueColors.size(); i++)
             {
-                if (PixelRGB::Equals(currPixel, uniqueColors[i]))
+                if (PixelRGB::Equals(&currPixel, &uniqueColors[i]))
                 {
                     isNewColor = false;
-                    normalMapColors[x][y]->SetVoronoiZone(i);
-                    voronoiZonesByPixel[x][y] = i;
+                    voronoiZonesByPixel[x][y] = i + 1;
                     break;
                 }
             }
@@ -522,89 +533,33 @@ void SketchProgram::ParseZoneMap(const std::string& filename)
             if (isNewColor)
             {
                 uniqueColors.push_back(currPixel);
-                normalMapColors[x][y]->SetVoronoiZone((int)uniqueColors.size() - 1);
-                voronoiZonesByPixel[x][y] = (int)uniqueColors.size() - 1;
+                voronoiZonesByPixel[x][y] = (int)uniqueColors.size();
             }
-            else
-                delete currPixel;
         }
     }
 
-    pixelsToUpdate.clear();
-    pixelsToUpdate.reserve(normalMapColors.size() * normalMapColors[0].size());
-    voronoiPoints.clear();
-}
+    // Initialize layers. Layer 0 will contain the contant normal/densitymap
+    std::unique_ptr<Layer> bottom = std::make_unique<Layer>("res/normalmaps/" + defaultNormalMap, "res/densitymaps/" + defaultDensityMap, screenWidth, screenHeight, 0);
+    layers.push_back(std::move(bottom));
 
-void SketchProgram::InitializeInputMaps(char* normal_name, char* density_name)
-{
-    int width, height, bytes;
-    std::string fileNorm = (normal_name == nullptr) ? "" : "res/normalmaps/" + std::string(normal_name);
-    std::string fileDens = (density_name == nullptr) ? "" : "res/densitymaps/" + std::string(density_name);
+    std::cout << (int)uniqueColors.size() << std::endl;
 
-    void* temp = stbi_load(fileNorm.c_str(), &width, &height, &bytes, 0);
-    normalMapPixels = PixelRGB::CreateContiguous2DPixmap(screenWidth, screenHeight, true);
-    
-    // Load density map with info if found.
-    if (temp != nullptr && fileNorm != "")
+    for (int i = 0; i < uniqueColors.size(); ++i)
     {
-        unsigned char* resized = new unsigned char[screenHeight * screenWidth * 3];
-        stbir_resize_uint8(
-            (unsigned char*)temp,
-            width,
-            height,
-            0,
-            resized,
-            screenWidth,
-            screenHeight,
-            0,
-            3
-        );
-
-        for (int x = 0; x < screenWidth; ++x)
-            for (int y = 0; y < screenHeight; ++y)
-            {
-                int index = bytes * (y * screenWidth + x);
-                normalMapPixels[y][x].r = resized[index + 0];
-                normalMapPixels[y][x].g = resized[index + 1];
-                normalMapPixels[y][x].b = resized[index + 2];
-            }
-
-        normalPredetermined = true;
-        delete[] resized;
+        std::unique_ptr<Layer> newLayer = std::make_unique<Layer>(screenWidth, screenHeight, i + 1);
+        layers.push_back(std::move(newLayer));
     }
-    stbi_image_free(temp);
 
-    // Do same for density map.
-    temp = stbi_load(fileDens.c_str(), &width, &height, &bytes, 0);
-    densityMapPixels = PixelRGB::CreateContiguous2DPixmap(screenWidth, screenHeight, false);
-    if (temp != nullptr && fileNorm != "")
-    {
-        unsigned char* resized = new unsigned char[screenHeight * screenWidth * 3];
-        stbir_resize_uint8(
-            (unsigned char*)temp,
-            width,
-            height,
-            0,
-            resized,
-            screenWidth,
-            screenHeight,
-            0,
-            3
-        );
+    normalMapPixels = PixelRGB::CreateContiguous2DPixmap(screenHeight, screenWidth);
+    densityMapPixels = PixelRGB::CreateContiguous2DPixmap(screenHeight, screenWidth);
 
-        for (int x = 0; x < screenWidth; ++x)
-            for (int y = 0; y < screenHeight; ++y)
-            {
-                int index = bytes * (y * screenWidth + x);
-                densityMapPixels[y][x].r = resized[index + 0];
-                densityMapPixels[y][x].g = resized[index + 1];
-                densityMapPixels[y][x].b = resized[index + 2];
-            }
 
-        densityPredetermined = true;
-        delete[] resized;
-    }
-    stbi_image_free(temp);
+    for (int x = 0; x < screenWidth; ++x)
+        for (int y = 0; y < screenHeight; ++y)
+        {
+            int zone = voronoiZonesByPixel[x][y];
+            layers[zone]->Set_PixelRefs(x, y, &normalMapPixels[y][x], &densityMapPixels[y][x]);
+        }
 
 }
 
@@ -621,13 +576,22 @@ void SketchProgram::LoadDefaultMesh()
     for (int x = 0; x < sizeX; x++)
         for (int y = 0; y < sizeY; y++)
         {
-            std::cout << "Spawning Point: x = " << x << ", y = " << y << "\n";
             float interpX = (float)x / (sizeX - 1);
             float interpY = (float)y / (sizeY - 1);
             Vector2D pos = Vector2D((interpX * maxX) + padding, (interpY * maxY) + padding);
 
             int pixX = (int)pos[0];
             int pixY = (int)pos[1];
+            int zone = voronoiZonesByPixel[pixX][pixY];
+
+            if (layers[zone]->Get_IsEditable())
+                std::cout << "Spawning Point: x = " << x << ", y = " << y << "\n";
+            else
+            {
+                std::cout << "Unable to spawn point: x = " << x << ", y = " << y << ", position is uneditable!" << "\n";
+                continue;
+            }
+            
 
             SDL_Color defCol;
             /*defCol.r = (Uint8)Helpers::Lerp(0, 255, interpX);
@@ -636,22 +600,16 @@ void SketchProgram::LoadDefaultMesh()
             defCol.a = 255;*/
 
             Helpers::NormalMapDefaultColor(&defCol);
-            int zone = voronoiZonesByPixel[pixY][pixX];
             std::shared_ptr<VoronoiPoint> newPoint = std::make_shared<VoronoiPoint>(pos, defCol, zone);
             EmplaceVoronoiPoint(newPoint, false);
             newestPointID = newPoint->Get_ID();
             voronoiPoints[newestPointID] = std::move(newPoint);
         }
 
-    for (int x = 0; x < screenWidth; x++)
+    for (auto& layer : layers)
     {
-        BarycentricUpdate(normalMapColors[x]);
-        for (int y = 0; y < screenHeight; y++)
-        {
-            normalMapColors[x][y]->UpdatePixel();
-        }
+        layer->UpdateLayerAll(true);
     }
-
 }
 
 void SketchProgram::CreateTextureFromPixelData(SDL_Texture*& text, void* pixels, int w, int h, int channels)
@@ -685,193 +643,15 @@ void SketchProgram::CreateTextureFromPixelData(SDL_Texture*& text, void* pixels,
     SDL_FreeSurface(surfaceTemp);
 }
 
-void SketchProgram::EmplaceSketchLine(SketchLine* editLine)
-{
-    Vector2D midpoint = editLine->Get_Midpoint();
-    int radiusPixels = editLine->Get_Magnitude() / 2.0f;
-    int centerX, centerY;
-
-    // Positions are already in world space, so casting to int will round down
-    // as expected and render at correct pixels around it.
-    centerX = (int)midpoint[0];
-    centerY = (int)midpoint[1];
-
-    // I didn't come up with this method of getting pixels in a circle, here's where I got it
-    // https://stackoverflow.com/questions/14487322/get-all-pixel-array-inside-circle
-    int minX = (centerX - radiusPixels >= 0) ? (centerX - radiusPixels) : 0;
-    int minY = (centerY - radiusPixels >= 0) ? (centerY - radiusPixels) : 0;
-    int maxY = (centerY + radiusPixels < screenHeight) ? (centerY + radiusPixels) : screenHeight - 1;
-    int maxX = (centerX + radiusPixels < screenWidth) ? (centerX + radiusPixels) : screenWidth - 1;
-    SDL_Color defColor;
-    Helpers::NormalMapDefaultColor(&defColor);
-
-    //std::cout << minX << " " << minY << " " << maxX << " " << maxY << "\n";
-
-    for (int x = minX; x <= maxX; x++)
-        for (int y = minY; y <= maxY; y++)
-        {
-            float pixDistSqr = Vector2D(x - centerX, y - centerY).SqrMagnitude();
-            float radiusSqr = radiusPixels * radiusPixels;
-
-            if (pixDistSqr <= radiusSqr)
-            {
-                float t = Helpers::InverseLerp(radiusSqr, 0.0f, pixDistSqr);
-                PixelRGB pixColor = Helpers::SDLColorToPixel(editLine->Get_RenderColor());
-                normalMapColors[x][y]->UpdatePixelInterp(&pixColor, t);
-            }
-        }
-}
-
 void SketchProgram::EmplaceVoronoiPoint(std::shared_ptr<VoronoiPoint>& newPoint, bool updateAffectedBarycentric)
 {
-    int floorPosX = newPoint->Get_Position()[0];
-    int floorPosY = newPoint->Get_Position()[1];
-    int zone = newPoint->Get_VoronoiZone();
-
-    std::vector<DynamicColor*> pixelsToEvaluate;
-    std::vector<int> redundantNodes;
-
-    // Pixels must be updated if their min point is overrwritten.
-    for (int x = 0; x < screenWidth; x++)
-        for (int y = 0; y < screenHeight; y++)
-        {
-            if (zone != voronoiZonesByPixel[x][y]) continue;
-
-            DynamicColor* it = normalMapColors[x][y];
-            if (it->TryAddMinPoint(newPoint))
-            {
-                pixelsToEvaluate.push_back(it);
-
-                for (auto& node : createdNodes)
-                {
-                    if ((it->Get_PixelPosition() - node.second->Get_Position()).SqrMagnitude() <= 1.5)
-                    {
-                        redundantNodes.push_back(node.first);
-                    }
-                }
-            }
-
-        }
-
-    // Check all pixels surrounding this one; if 3 unique min voronoi points are detected,
-    // then we have found an intersection and will create a node.
-    // If a pixel goes out of bounds and 2 unique point are detected, then we have an
-    // intersection node along the EDGE of the screen.
-    // If a pixel goes out of bounds in 2 axes AND 1 unique point is found, then we have a corner.
-    std::unordered_map<int, VoronoiPoint*> affectedPoints;
-    for (auto& pix : pixelsToEvaluate)
-    {
-        int pixX = pix->Get_PixelPosition()[0];
-        int pixY = pix->Get_PixelPosition()[1];
-
-        //std::cout << pix->Get_PixelPosition()[0] << " " << pix->Get_PixelPosition()[1] << "\n";
-
-        int OOBx = 0;   // Determines if we HAVE GONE out of bounds at some point thus far (sign says direction)
-        int OOBy = 0;   // Same as above, for y-direction.
-        std::vector<VoronoiPoint*> uniquePoints;
-        Vector2D averagePos = Vector2D(pixX, pixY);
-        uniquePoints.push_back(newPoint.get());
-        for (int x = -1; x <= 1; x++)
-        {
-            int checkX = pixX + x;
-            OOBx = (OOBx == 0) ? ((checkX < 0) ? -1 : (checkX >= screenWidth) ? 1 : 0) : OOBx;
-
-            for (int y = -1; y <= 1; y++)
-            {
-                int checkY = pixY + y;
-                OOBy = (OOBy == 0) ? ((checkY < 0) ? -1 : (checkY >= screenHeight) ? 1 : 0) : OOBy;
-
-                if (checkY < 0 || checkY >= screenHeight) continue;
-                if (checkX < 0 || checkX >= screenWidth) continue;
-
-                bool contains = false;
-                VoronoiPoint* add = normalMapColors[checkX][checkY]->Get_MinPoint();
-                if (add == nullptr) break;
-
-                affectedPoints[add->Get_ID()] = add;
-                for (auto* pt : uniquePoints)
-                {
-                    if (pt->Get_ID() == normalMapColors[checkX][checkY]->Get_MinPoint()->Get_ID())
-                    {
-                        contains = true;
-                        break;
-                    }
-                }
-
-                if (!contains)
-                {
-                    averagePos += Vector2D(checkX, checkY);
-                    uniquePoints.push_back(add);
-                }
-            }
-        }
-
-        if (uniquePoints.size() + std::abs(OOBx) + std::abs(OOBy) >= 3)
-        {
-            averagePos /= (int)uniquePoints.size();
-
-            std::shared_ptr<IntersectionNode> toAdd = std::make_shared<IntersectionNode>(averagePos, uniquePoints, zone);
-
-            createdNodes.emplace(toAdd->Get_ID(), std::shared_ptr<IntersectionNode>(toAdd));
-            for (auto& pt : uniquePoints)
-            {
-                pt->AddNode(std::shared_ptr<IntersectionNode>(toAdd));
-            }
-        }
-    }
-    pixelsToEvaluate.clear();
-
-    // Yikes...
-    // But we want to update any pixels that have been affected by the change, which
-    // will involve pixels outside of the new voronoi zone.
-    for (auto& pt : affectedPoints)
-    {
-        if (updateAffectedBarycentric)
-        {
-            for (int x = 0; x < screenWidth; x++)
-            {
-                for (int y = 0; y < screenHeight; y++)
-                {
-                    VoronoiPoint* minPt = normalMapColors[x][y]->Get_MinPoint();
-                    if (minPt == nullptr) continue;
-
-                    if (minPt->Get_ID() == pt.first && minPt->Get_VoronoiZone() == pt.second->Get_VoronoiZone())
-                    {
-                        pixelsToUpdate.push_back(normalMapColors[x][y]);
-                    }
-                }
-            }
-        }
-
-        // Remove redundant nodes from voronoi points affected.
-        for (auto& nodeID : redundantNodes)
-        {
-            pt.second->RemoveNode(nodeID);
-        }
-    }
-
-    // Remove redundant nodes from global container (should be last ref. to them, making them delete as well)
-    for (auto& nodeID : redundantNodes)
-    {
-        createdNodes.erase(nodeID);
-    }
-
-    // Now that nodes are created, we need each pixel to know what triangle
-    // created by the voronoi point and its nodes that it resides in.
-    // Checks for point-triangle intersection check each iteration for each pixel.
-    if (updateAffectedBarycentric)
-        BarycentricUpdate(pixelsToUpdate);
-}
-
-bool SketchProgram::PointRectOverlap(const SDL_Rect& aabb, const Vector2D& pt)
-{
-    return (aabb.x <= pt[0] && aabb.x + aabb.w >= pt[0] &&
-            aabb.y <= pt[1] && aabb.y + aabb.h >= pt[1]);
+    layers[newPoint->Get_VoronoiZone()]->AddVoronoiPoint(newPoint, updateAffectedBarycentric);
 }
 
 SketchLine* SketchProgram::DrawSketchLine(bool placePoint)
 {
     SketchLine* editLine = (sketchLines.empty()) ? nullptr : sketchLines.back().get();
+    int zone = voronoiZonesByPixel[(int)mousePos[0]][(int)mousePos[1]];
 
     // If mouse was just clicked, create new line at mouse position.
     if (!leftMouseDownLastFrame)
@@ -879,9 +659,9 @@ SketchLine* SketchProgram::DrawSketchLine(bool placePoint)
         editLine = new SketchLine(mousePos, mousePos);
         sketchLines.push_back(std::shared_ptr<SketchLine>(editLine));
 
-        if (placePoint)
+        std::cout << zone << "\n";
+        if (placePoint && layers[zone]->Get_IsEditable())
         {
-            int zone = voronoiZonesByPixel[(int)mousePos[0]][(int)mousePos[1]];
             std::shared_ptr<VoronoiPoint> newPoint = std::make_shared<VoronoiPoint>(editLine->Get_Origin(), editLine->Get_RenderColor(), zone);
             newPoint->Set_RenderColor((densityMode) ? red : black);
             EmplaceVoronoiPoint(newPoint);
@@ -898,14 +678,27 @@ SketchLine* SketchProgram::DrawSketchLine(bool placePoint)
     editLine->SetColorMode(keys[SDL_SCANCODE_SPACE]);
     editLine->UpdateColor();
 
-    if (placePoint) 
+    if (placePoint && layers[zone]->Get_IsEditable())
     {
-        voronoiPoints[newestPointID]->Set_NormalEncoding(editLine->Get_RenderColor());
-        voronoiPoints[newestPointID]->Set_Polarity(editLine->Get_Polarity());
+        if (!densityMode)
+        {
+            voronoiPoints[newestPointID]->Set_NormalEncoding(editLine->Get_RenderColor());
+            voronoiPoints[newestPointID]->Set_Polarity(editLine->Get_Polarity());
+        }
+        else
+        {
+            voronoiPoints[newestPointID]->Set_VoronoiDensity(editLine->GetPixelValueFromDistance(255, 0));
+        }
     }
     mainVecField->UpdateAll();
 
     return editLine;
+}
+
+bool SketchProgram::PointRectOverlap(const SDL_Rect& aabb, const Vector2D& pt)
+{
+    return (aabb.x <= pt[0] && aabb.x + aabb.w >= pt[0] &&
+        aabb.y <= pt[1] && aabb.y + aabb.h >= pt[1]);
 }
 
 void SketchProgram::MoveSelectedPoints()
@@ -926,114 +719,12 @@ void SketchProgram::MoveSelectedPoints()
 
 }
 
-void SketchProgram::BarycentricUpdate(const std::vector<DynamicColor*>& toUpdate)
-{
-    // If a triangle formed by using the voronoi point and two adjacent nodes overlaps a pixel,
-    // then it resides within that triangle and should update color according to those nodes
-    // and calculated coordinates.
-    for (auto& pix : toUpdate)
-    {
-        auto evalPt = pix->Get_MinPoint();
-        auto nodeList = evalPt->Get_NeighboringNodes();
-        bool success = false;
-        for (int i = 0; i < nodeList.size(); i++)
-        {
-            int next = (i + 1) % nodeList.size();
-
-            // If true, we found the triangle this pixel resides in. Now compute its relative coordinates
-            // and set its required references for rendering.
-            if (Helpers::PointTriangleIntersection(pix->Get_PixelPosition(), evalPt->Get_Position(),
-                nodeList[i]->Get_Position(), nodeList[next]->Get_Position()))
-            {
-                pix->Set_TriangulationNodes(nodeList[i], nodeList[next], evalPt->Get_Position());
-                success = true;
-                break;
-            }
-        }
-
-        if (success) continue;
-
-        //std::cout << "Could not find triangle for pixel\n";
-    }
-}
-
-void SketchProgram::CheckForIntersections(const std::vector<DynamicColor*>& toCheck)
-{
-    for (auto& pix : toCheck)
-    {
-        int pixX = pix->Get_PixelPosition()[0];
-        int pixY = pix->Get_PixelPosition()[1];
-        int zone = pix->Get_VoronoiZone();
-
-        //std::cout << pix->Get_PixelPosition()[0] << " " << pix->Get_PixelPosition()[1] << "\n";
-
-        int OOBx = 0;   // Determines if we HAVE GONE out of bounds at some point thus far (sign says direction)
-        int OOBy = 0;   // Same as above, for y-direction.
-        std::vector<VoronoiPoint*> uniquePoints;
-        Vector2D averagePos = Vector2D(pixX, pixY);
-        for (int x = -1; x <= 1; x++)
-        {
-            int checkX = pixX + x;
-            OOBx = (OOBx == 0) ? ((checkX < 0) ? -1 : (checkX >= screenWidth) ? 1 : 0) : OOBx;
-
-            for (int y = -1; y <= 1; y++)
-            {
-                int checkY = pixY + y;
-                OOBy = (OOBy == 0) ? ((checkY < 0) ? -1 : (checkY >= screenHeight) ? 1 : 0) : OOBy;
-
-                if (checkY < 0 || checkY >= screenHeight) continue;
-                if (checkX < 0 || checkX >= screenWidth) continue;
-
-                bool contains = false;
-                VoronoiPoint* add = normalMapColors[checkX][checkY]->Get_MinPoint();
-                if (add == nullptr) break;
-
-                for (auto* pt : uniquePoints)
-                {
-                    if (pt->Get_ID() == normalMapColors[checkX][checkY]->Get_MinPoint()->Get_ID())
-                    {
-                        contains = true;
-                        break;
-                    }
-                }
-
-                if (!contains)
-                {
-                    averagePos += Vector2D(checkX, checkY);
-                    uniquePoints.push_back(add);
-                }
-            }
-        }
-
-        if (uniquePoints.size() + std::abs(OOBx) + std::abs(OOBy) >= 3)
-        {
-            averagePos /= (int)uniquePoints.size();
-
-            std::shared_ptr<IntersectionNode> toAdd = std::make_shared<IntersectionNode>(averagePos, uniquePoints, zone);
-
-            createdNodes.emplace(toAdd->Get_ID(), std::shared_ptr<IntersectionNode>(toAdd));
-            for (auto& pt : uniquePoints)
-            {
-                pt->AddNode(std::shared_ptr<IntersectionNode>(toAdd));
-            }
-        }
-    }
-}
-
 void SketchProgram::RebuildMapNaive()
 {
-    for (int x = 0; x < screenWidth; x++)
-        for (int y = 0; y < screenHeight; y++)
-        {
-            normalMapColors[x][y]->ClearVoronoiData();
-        }
-
-    for (auto& vPt : voronoiPoints)
+    for (auto& layer : layers)
     {
-        vPt.second->ClearNodes();
+        layer->ClearData();
     }
-
-    createdNodes.clear();
 
     std::cout << "Rebuilding map...\n";
     int cnt = voronoiPoints.size();
@@ -1048,26 +739,10 @@ void SketchProgram::RebuildMapNaive()
     // so I threw this if statement at the top level like so to reduce slowdown
     // from thousands of branches
     std::cout << "Updating pixels...\n";
-    if (!voronoiPoints.empty())
+    for (auto& layer : layers)
     {
-        for (int x = 0; x < screenWidth; x++)
-        {
-            BarycentricUpdate(normalMapColors[x]);
-            for (int y = 0; y < screenHeight; y++)
-            {
-                normalMapColors[x][y]->UpdatePixel();
-            }
-        }
-    }
-    else
-    {
-        for (int x = 0; x < screenWidth; x++)
-        {
-            for (int y = 0; y < screenHeight; y++)
-            {
-                normalMapColors[x][y]->UpdatePixel();
-            }
-        }
+        if (layer->Get_IsEditable())
+            layer->UpdateLayerAll(!voronoiPoints.empty());
     }
 
     mainVecField->UpdateAll();
@@ -1077,46 +752,12 @@ void SketchProgram::RebuildMapNaive()
 
 void SketchProgram::RecolorSelectedPoints(SketchLine* followLine)
 {
-    // Below is code that tries to optimize which pixels should update when recoloring
-    // multiple points, but it doesn't work right now; for now just update all pixels.
-    
     if (!leftMouseDownLastFrame)
     {
-        pixelsToUpdate.clear();
-
-        for(int x = 0; x < screenWidth; x++)
-            for (int y = 0; y < screenHeight; y++)
-            {
-                DynamicColor* it = normalMapColors[x][y];
-                if (it->Get_TriNodeA() == nullptr || it->Get_TriNodeB() == nullptr)
-                    continue;
-
-                // Pixel should update if it's barcentric blending is involved with the points'
-                // nodes, since those nodes are influenced by the points themselves.
-                for (auto& ptA : it->Get_TriNodeA()->Get_IntersectingPoints())
-                {
-                    if (selectedPoints.count(ptA->Get_ID()) >= 1)
-                    {
-                        pixelsToUpdate.push_back(it);
-                        continue;
-                    }
-                }
-
-                for (auto& ptB : it->Get_TriNodeB()->Get_IntersectingPoints())
-                {
-                    if (selectedPoints.count(ptB->Get_ID()) >= 1)
-                    {
-                        pixelsToUpdate.push_back(it);
-                        break;
-                    }
-                }
-            }
-
+        for (auto& layer : layers)
+            layer->RecolorSelectedPoints(selectedPoints);
     }
 
-    // TODO: If NOT density mode, do the below code.
-    // else, loop through each pixel to update, set density pixels' values (all)
-    // to -> lerp between 128 and 255 based on followline length!
     if (!densityMode)
     {
         SDL_Color cacheCol = followLine->Get_RenderColor();
@@ -1136,78 +777,44 @@ void SketchProgram::RecolorSelectedPoints(SketchLine* followLine)
         std::cout << cacheVal << "\n";
         for (auto& vPt : selectedPoints)
         {
-           
             vPt.second->Set_VoronoiDensity(cacheVal);
         }
     }
-
-    //for (int x = 0; x < screenWidth; x++)
-    //    for (int y = 0; y < screenHeight; y++)
-    //    {
-    //        normalMapColors[x][y]->UpdatePixel();
-    //    }
 }
 
 void SketchProgram::DeleteSelectedPoints()
 {
     for (auto& pt : selectedPoints)
     {
-        voronoiPoints.erase(pt.first);
-        for (auto& node : pt.second->Get_NeighboringNodes())
+        // Should only be contained in one layer, but it doesn't take long to do this
+        // anyway in case implemenation changes somehow.
+        for (auto& layer : layers)
         {
-            createdNodes.erase(node->Get_ID());
+            layer->RemovePoint(pt.second);
         }
+
+        voronoiPoints.erase(pt.first);
     }
+
+    selectedPoints.clear();
 
     RebuildMapNaive();
     selectedPoints.clear();
 }
 
 void SketchProgram::CreateStitchDiagram()
-{
-    std::string densName;
-    if (!densityPredetermined)
-    {
-        std::cout << "Use premade density map from file (Y/N)?\nSelecting \"N\" will use currenly created density channel.";
-        std::cin >> densName;
-        densName.erase(std::remove_if(densName.begin(), densName.end(), isspace), densName.end());
-    }
+{ 
+    /*std::cout << "Use premade density map from file (Y/N)?\nSelecting \"N\" will use currenly created density channel.";
+    std::cin >> densName;
+    densName.erase(std::remove_if(densName.begin(), densName.end(), isspace), densName.end());*/
     
     int width, height, bytes;
     unsigned char* pixels;
     PixelRGB** densityMap = nullptr;
 
-    if (densName == "Y" || densName == "y")
-    {
-        std::cout << "Enter density map file name: ";
-        std::cin >> densName;
-        densName = "res/densitymaps/" + densName;
-
-        pixels = stbi_load(densName.c_str(), &width, &height, &bytes, 0);
-        densityMap = PixelRGB::CreateContiguous2DPixmap(width, height, false);
-
-        if (pixels == nullptr)
-        {
-            std::cout << "Unable to load image " << densName << "\n";
-            return;
-        }
-
-        for (int x = 0; x < width; x++)
-            for (int y = 0; y < height; y++)
-            {
-                int index = bytes * (y * width + x);
-
-                densityMap[x][y].r = static_cast<unsigned char>(pixels[index]);
-                densityMap[x][y].g = static_cast<unsigned char>(pixels[index + 1]);
-                densityMap[x][y].b = static_cast<unsigned char>(pixels[index + 2]);
-            }
-    }
-    else
-    {
-        width = 100;
-        height = 100;
-        bytes = 3;
-    }
+    width = 100;
+    height = 100;
+    bytes = 3;
 
     std::unique_ptr<StitchResult> res = std::make_unique<StitchResult>(screenWidth, screenHeight, width, height, normalMapPixels, (densityMap == nullptr) ? densityMapPixels : densityMap);
     if (res->CreateStitches(true))

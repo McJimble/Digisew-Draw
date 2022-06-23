@@ -11,6 +11,11 @@ DynamicColor::DynamicColor(PixelRGB* affectedPixel, PixelRGB* densityPixel, cons
     this->pixPosition       = position;
     this->voronoiDensity    = 1.0f;
     this->voronoiZone       = 0;
+
+    // Pixels are initialized with normal map default, so fix that for density pixel.
+    this->densityPixel->r = 128;
+    this->densityPixel->g = 128;
+    this->densityPixel->b = 128;
 }
 
 DynamicColor::~DynamicColor()
@@ -145,7 +150,7 @@ bool DynamicColor::ContainsNode(IntersectionNode* node)
     return (node->Get_ID() == triNodeA->Get_ID() || node->Get_ID() == triNodeB->Get_ID());
 }
 
-void DynamicColor::ClearVoronoiData()
+void DynamicColor::ClearVoronoiData(bool resetColor)
 {
     triNodeA.reset();
     triNodeB.reset();
@@ -154,7 +159,9 @@ void DynamicColor::ClearVoronoiData()
     baryU = 0;
     baryV = 0;
     baryW = 0;
-    Helpers::NormalMapDefaultColor(affectedPixel);
+
+    if (resetColor)
+        Helpers::NormalMapDefaultColor(affectedPixel);
 }
 
 int DynamicColor::Get_VoronoiZone()
@@ -167,7 +174,7 @@ float DynamicColor::Get_VornoiDensity()
     return voronoiDensity;
 }
 
-const PixelRGB* DynamicColor::Get_AffectedPixel() const
+PixelRGB* DynamicColor::Get_AffectedPixel() const
 {
     return affectedPixel;
 }
@@ -190,4 +197,10 @@ IntersectionNode* DynamicColor::Get_TriNodeA() const
 IntersectionNode* DynamicColor::Get_TriNodeB() const
 {
     return triNodeB.get();
+}
+
+void DynamicColor::Set_AffectedPixels(PixelRGB* normalPix, PixelRGB* densityPix)
+{
+    affectedPixel = normalPix;
+    densityPixel = densityPix;
 }

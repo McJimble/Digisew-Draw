@@ -52,15 +52,17 @@ public:
 
 	bool ContainsNode(IntersectionNode* node);
 
-	void ClearVoronoiData();
+	void ClearVoronoiData(bool resetColor = true);
 
 	int Get_VoronoiZone();
 	float Get_VornoiDensity();
-	const PixelRGB* Get_AffectedPixel() const;
+	PixelRGB* Get_AffectedPixel() const;
 	const Vector2D& Get_PixelPosition() const;
 	VoronoiPoint* Get_MinPoint() const;
 	IntersectionNode* Get_TriNodeA() const;
 	IntersectionNode* Get_TriNodeB() const;
+
+	void Set_AffectedPixels(PixelRGB* normalPix, PixelRGB* densityPix);
 	
 private:
 

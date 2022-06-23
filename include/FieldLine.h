@@ -14,7 +14,7 @@ class FieldLine
 {
 public:
 
-	FieldLine(DynamicColor* colorToRead, const Vector2D& pos, float length = 5.0f);
+	FieldLine(const PixelRGB* colorToRead, const Vector2D& pos, float length = 5.0f);
 	~FieldLine();
 
 	// Recalculates render positions and direction when told.
@@ -25,7 +25,7 @@ public:
 
 private:
 
-	DynamicColor* colorToRead;
+	const PixelRGB* colorToRead;
 
 	float length;
 	float initialLength;

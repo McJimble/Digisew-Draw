@@ -18,14 +18,11 @@
 #include "DynamicColor.h"
 #include "VectorField.h"
 #include "StitchResult.h"
+#include "Layer.h"
 
 #undef main
 
-// Fixing window name + dimensions for now to make start code simpler.
-// Can change later if needed.
 #define WINDOW_NAME "Digisew-Draw"
-#define DEF_SCREEN_WIDTH 500
-#define DEF_SCREEN_HEIGHT 500
 
 /*
  *	Main engine/driver for the sketch program. Handles main functionality such as
@@ -73,15 +70,11 @@ private:
 	SDL_Renderer* renderer;			// Renderer for SDL
 	int screenWidth, screenHeight;	// Size of window
 
-	PixelRGB** normalMapPixels;													// Actual pixels displayed on texture.
+	PixelRGB** normalMapPixels;													// 2D array of the actual pixels displayed on texture.
 	PixelRGB** densityMapPixels;
 	SDL_Texture* normalMapTexture;												// Texture being displayed/changed in background.
-	std::vector<std::vector<DynamicColor*>> normalMapColors;					// Colors being sent by normal map sketches
-	std::vector<DynamicColor*> pixelsToUpdate;									// Pixels that will be updated this frame.
-	// ^ The above vars. live for the entire program and are referenced a lot, so I opted to make them raw pointers for performance 
-	// (sorry modern C++ guys, the automatic memory management libraries are awful for speed when ownership is shared)
+	std::vector<std::unique_ptr<Layer>> layers;
 	
-	std::unordered_map<int, std::shared_ptr<IntersectionNode>> createdNodes;	// Intersection nodees that have been created thus far (where edges connect)
 	std::vector<std::vector<int>> voronoiZonesByPixel;							// Voronoi zone for each pixel on screen.
 	std::vector<std::shared_ptr<SketchLine>> sketchLines;						// Lines drawn by the user; not normally shown but are stored for debugging.
 
@@ -106,9 +99,14 @@ private:
 	bool pointPositionsDirty = false;		// Have point positions been moved and should therefore refresh the map?
 	
 	bool densityMode = false;				// Is density mode currently active (only density changes, not colors)?
-	bool normalPredetermined = false;		// Was normal map pulled from file at start of program?
-	bool densityPredetermined = false;		// Was density map pulled from file at start of program?
 
+	// Parameters read from starting parameters file:
+	int pWidth = 0;
+	int pHeight = 0;
+	double pVectorFieldDensityFac = 0.0f;
+	std::string defaultNormalMap = "";
+	std::string defaultDensityMap = "";
+	std::string zoneMapName = "";
 
 	Vector2D mousePos;						// Cached position of mouse in screen space.
 	Vector2D prevMousePos;					// Mouse position of previous frame; used to displace things with mouse movement.
@@ -127,17 +125,14 @@ private:
 	void Update();
 	void Render();
 
+	void ReadParameters(const char* paramFile);
+
 	/*
 	 *	Using stb_image, reads raw pixel from an image file and stores
 	 *  in a custom structure we use to determine voronoi zones.
 	 *  Calling will reset and reallocate the voronoi map.
 	 */
 	void ParseZoneMap(const std::string& filename = "");
-
-	/*
-	 * 
-	 */
-	void InitializeInputMaps(char* normal_name, char* density_name);
 
 	/*
 	 *	Creates a default mesh containing 10 rows and columns of evently spaced voronoiPoints.
@@ -151,20 +146,9 @@ private:
 	void CreateTextureFromPixelData(SDL_Texture*& text, void* pixels, int w, int h, int channels);
 
 	/*
-	 *	Places the currently created sketch line and modifies the pixels
-	 *  with the area it covers. Also updates the current texture
-	 */
-	void EmplaceSketchLine(SketchLine* editLine);
-
-	/*
 	 *	Places a new voronoi point and updates the displayed map
 	 */
-	void EmplaceVoronoiPoint(std::shared_ptr<VoronoiPoint>& editline, bool updateAffectedBarycentric = true);
-
-	/*
-	 *	Does the SDL_Rect overlap this point?
-	 */
-	bool PointRectOverlap(const SDL_Rect& aabb, const Vector2D& pt);
+	void EmplaceVoronoiPoint(std::shared_ptr<VoronoiPoint>& editpt, bool updateAffectedBarycentric = true);
 
 	/*
 	 *	Draw line, emplace point when mouse down
@@ -177,6 +161,11 @@ private:
 	SketchLine* DrawSketchLine(bool placePoint);
 
 	/*
+	 *	Does the SDL_Rect overlap this point?
+	 */
+	bool PointRectOverlap(const SDL_Rect& aabb, const Vector2D& pt);
+
+	/*
 	 *	Moves selected points with left mouse movement; recompute map on left mouse up.
 	 */
 	void MoveSelectedPoints();
@@ -187,13 +176,6 @@ private:
 	 *	followLine: Sketch line to color pixels of
 	 */
 	void RecolorSelectedPoints(SketchLine* followLine);
-
-	/*
-	 *  Updates barycentric coordinates and coloring for a list of pixels
-	 */
-	void BarycentricUpdate(const std::vector<DynamicColor*>& toUpdate);
-
-	void CheckForIntersections(const std::vector<DynamicColor*>& toCheck);
 
 	/*
 	 *	Generates the entire map based on current voronoi points that already have
@@ -214,8 +196,6 @@ private:
 	void CreateStitchDiagram();
 
 	/* Quick helper functions to determine if use is allowed to edit voronoi in certain mode*/
-	bool CanEditNormals() { return !densityMode && !normalPredetermined; };
-	bool CanEditDensity() { return densityMode && !densityPredetermined; };
 
 	int Get_ScreenHeight();
 	int Get_ScreenWidth();

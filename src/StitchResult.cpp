@@ -5,6 +5,8 @@
 #include <ostream>
 #include <sstream>
 #include <memory>
+#include <cstdio>
+#include <direct.h>
 
 int StitchResult::resultID = 0;
 
@@ -115,25 +117,17 @@ bool StitchResult::CreateStitches(bool createWindow)
     int imgHeight = stitchImg->getHeight();
     int normWidth = normalMapImg->getWidth();
     int normHeight = normalMapImg->getHeight();
-    
-    if (createWindow)
-    {
-        std::string winName = "Stitch Result ";
-        winName += std::to_string(++resultID);
 
-        window = (SDL_CreateWindow(winName.c_str(),
-            SDL_WINDOWPOS_CENTERED,
-            SDL_WINDOWPOS_CENTERED,
-            imgWidth,
-            imgHeight,
-            0));
+    std::string fileName;
+    std::cout << "Enter file name for output DST: \n";
+    std::cin >> fileName;
 
-        renderer = SDL_CreateRenderer(window, -1, 0);
-    }
+    if (fileName.find(".dst") <= fileName.size() - 1)
+        fileName = fileName.substr(0, fileName.find(".dst"));
 
     // Beginning of legacy stitch generation, with a few modifications for compatibility
     // ---------
-    std::string dstName = "tempdst.csv";
+    std::string dstName = fileName + ".csv";
 
     // store the corresponding intensity values of the points
     std::vector<unsigned char> densityPoints;
@@ -210,6 +204,8 @@ bool StitchResult::CreateStitches(bool createWindow)
     std::cout << "a1 = " << alpha1 << ", b1 = " << beta1 << ", a2 = " << alpha2 << ", b2 = " << beta2 << "\n";
     std::cout << "w = " << bw << "\n";
 
+    std::cout << "\nBuilding stitch....\n";
+
     // Temp copy of normal map that is later reversed in legacy code, so this
     // was required to make it work with new setup.
     std::unique_ptr<Image> reverseNormMap = std::make_unique<Image>(normWidth, normHeight, 4);
@@ -220,7 +216,7 @@ bool StitchResult::CreateStitches(bool createWindow)
         }
 
     bw = 0.0;
-    beta2 = 5.0;
+    //beta2 = 5.0;
     reverseNormMap->blend(bw * 0.5 + 0.5);
 
     std::vector<vec2> normals = reverseNormMap->interpretNormalMap();
@@ -275,11 +271,11 @@ bool StitchResult::CreateStitches(bool createWindow)
     std::vector<bool> isoff;
     reverseNormMap->flagOff(isoff, graph, normals);
 
-    const int Height = 100;
-    const int Width = 100;
+    const float Height = 100;
+    const float Width = 100;
 
-    float xr = imgWidth / (float)Width;
-    float yr = imgWidth / (float)Height;
+    float xr = imgWidth / Width;
+    float yr = imgWidth / Height;
 
     std::vector<pixel> v1 = reverseNormMap->readImageIntoBuffer();
 
@@ -289,6 +285,21 @@ bool StitchResult::CreateStitches(bool createWindow)
 
     std::ofstream data(dstName);
 
+    if (createWindow)
+    {
+        std::string winName = "Stitch Result ";
+        winName += std::to_string(++resultID);
+
+        window = (SDL_CreateWindow(winName.c_str(),
+            SDL_WINDOWPOS_CENTERED,
+            SDL_WINDOWPOS_CENTERED,
+            imgWidth,
+            imgHeight,
+            0));
+
+        renderer = SDL_CreateRenderer(window, -1, 0);
+    }
+
     // Legacy code addition; drawing with SDL lines over black background instead.
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderFillRect(renderer, NULL);
@@ -297,19 +308,22 @@ bool StitchResult::CreateStitches(bool createWindow)
     for (int i = 0; i < graph.size(); i += 1) {
         // read consecutive points to draw edge
         float x1 = graph[i].u.x;
-        float y1 = (float)Height - graph[i].u.y;
+        float y1 = Height - graph[i].u.y;
         float x2 = graph[i].v.x;
-        float y2 = (float)Height - graph[i].v.y;
+        float y2 = Height - graph[i].v.y;
 
-        // data << x1 << " " << y1 << "\n";
         std::ostringstream s1;
-        s1 << x1;
+        s1 << Width - x1;
         std::string sx1(s1.str());
 
         std::ostringstream s2;
-        s2 << y1;
+        s2 << Height - y1;
         std::string sy1(s2.str());
 
+        // On first iteration, jump to first stitch position. This is what removes the
+        // the "jump" stitch going across from a corner to a random stitch position.
+        if (i == 0)
+            data << "\"*\", \"JUMP\", " << "\"" << sx1 << "\", " << "\"" << sy1 << "\", " << "1\n";
         if (i == graph.size() - 1)
             data << "\"*\", \"END\", " << "\"" << sx1 << "\", " << "\"" << sy1 << "\", " << "0\n";
         else {
@@ -324,8 +338,8 @@ bool StitchResult::CreateStitches(bool createWindow)
 
         // Draw line to renderer, accounting for SDL inverting the y-axis.
         SDL_RenderDrawLineF(renderer, imgWidth - x1, y1, imgWidth - x2, y2);
+        //std::cout << imgWidth - x1 << " " << y1 << " " << imgWidth - x2 << " " << y2 << "\n";
     }
-    SDL_RenderPresent(renderer);
 
     data.close();
 
@@ -333,7 +347,7 @@ bool StitchResult::CreateStitches(bool createWindow)
     SDL_Surface* surfaceTemp;
     Uint32 rmask, gmask, bmask, amask;
 
-    int channels = 4;
+    int channels = 4;   // Reading only RGB later, but apparently renderer padds with an extra byte!
     int depth = channels * 8;
     int pitch = channels * imgWidth;
 
@@ -341,15 +355,15 @@ bool StitchResult::CreateStitches(bool createWindow)
     rmask = 0xff000000 >> shift;
     gmask = 0x00ff0000 >> shift;
     bmask = 0x0000ff00 >> shift;
-    amask = 0x00000000;
+    amask = 0x000000ff;
 #else 
     rmask = 0x000000ff;
     gmask = 0x0000ff00;
     bmask = 0x00ff0000;
-    amask = 0x00000000;
+    amask = 0xff000000;
 #endif
 
-    surfaceTemp = SDL_CreateRGBSurface(0, imgWidth, imgWidth, depth, rmask, gmask, bmask, amask);
+    surfaceTemp = SDL_CreateRGBSurface(0, imgWidth, imgHeight, depth, rmask, gmask, bmask, amask);
     if (surfaceTemp == NULL)
     {
         std::cout << "Surface could not be created\n" << SDL_GetError();
@@ -362,17 +376,17 @@ bool StitchResult::CreateStitches(bool createWindow)
         for (int y = 0; y < imgHeight; y++)
         {
             pixel pix;
-            int index = 4 * (y * imgWidth + x);
+            int index = 3 * (y * imgWidth + x);
             pix.r = pixels[index];
             pix.g = pixels[index + 1];
             pix.b = pixels[index + 2];
             pix.a = 255;
-            stitchImg->setpixel(x, y, pix);
+            stitchImg->setpixel(y, x, pix);
         }
 
     // run lib emb convert
-    char command[100];
-    std::string outputName = "output/dst/" + dstName.substr(0, dstName.find(".csv")) + ".dst";
+    char command[200];
+    std::string outputName = dstName.substr(0, dstName.find(".csv")) + ".dst";
     std::cout << outputName << std::endl;
 
     sprintf_s(command,
@@ -387,6 +401,23 @@ bool StitchResult::CreateStitches(bool createWindow)
     // needs to be changed !!
     // - James
     system(command);
+
+    if (std::rename(dstName.c_str(), ("output/csv/" + dstName).c_str()) != 0)
+    {
+        std::cout << "Failed to save to: " << ("output/csv/" + dstName + "\n");
+    }
+
+    if (std::rename(outputName.c_str(), ("output/dst/" + outputName).c_str()) != 0)
+    {
+        std::cout << "Failed to save to: " << ("output/dst/" + outputName + "\n");
+    }
+    else
+    {
+        std::cout << "Successfully saved to: " << ("output/dst/" + outputName + "\n");
+    }
+
+    SDL_UpdateWindowSurface(window);
+    SDL_RenderPresent(renderer);
 
     return true;
 }

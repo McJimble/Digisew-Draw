@@ -2369,7 +2369,7 @@ const std::vector<edge>& segments
        // lookup weighting parameter from the normal map
        pixel pix = getpixel(std::floor(current.y), std::floor(current.x));
        float c = (float)(pix.b - 128.0) / 128.0;
-       //c = 1;
+       c = 1;
        // compute final weight
        float w = (1 - c) * w1 + c * w2;
        // float w = std::max((1-c)*w1, c*w2);

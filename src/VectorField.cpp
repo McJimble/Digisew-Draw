@@ -14,10 +14,10 @@ VectorField::~VectorField()
 
 }
 
-void VectorField::InitializeVectors(const std::vector<std::vector<DynamicColor*>>& pixmap, float lineLength)
+void VectorField::InitializeVectors(PixelRGB**& pixmap, int pixelsX, int pixelsY, float lineLength)
 {
-    int maxX = pixmap.size() - padding - padding;
-    int maxY = pixmap[0].size() - padding - padding;
+    int maxX = pixelsX - padding - padding;
+    int maxY = pixelsY - padding - padding;
 
     fieldLines.resize(sizeX);
     for (int x = 0; x < sizeX; x++)
@@ -33,7 +33,7 @@ void VectorField::InitializeVectors(const std::vector<std::vector<DynamicColor*>
             int pixX = (int)pos[0];
             int pixY = (int)pos[1];
             
-            FieldLine* newLine = new FieldLine(pixmap[pixX][pixY], pos, lineLength);
+            FieldLine* newLine = new FieldLine(&pixmap[pixY][pixX], pos, lineLength);
             temp.push_back(newLine);
         }
         fieldLines[x].insert(fieldLines[x].end(), temp.begin(), temp.end());

@@ -65,7 +65,7 @@ void SketchLine::UpdateColor()
 		restoreG = rendColor.g;
 	}
 
-	std::cout << (int)rendColor.r << ", " << (int)rendColor.g  << ", " << (int)rendColor.b << "\n";
+	//std::cout << (int)rendColor.r << ", " << (int)rendColor.g  << ", " << (int)rendColor.b << "\n";
 }
 
 void SketchLine::SetStartPoint(const Vector2D& start)
