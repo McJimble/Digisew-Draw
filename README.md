@@ -14,7 +14,7 @@ Currently in active development.
   - glm https://github.com/g-truc/glm
   
  **Must install yourself:**
-  - SDL2 https://www.libsdl.org/ (must install on your own)
+  - SDL2 https://www.libsdl.org/ 
 
 # Using Digisew-Draw
 
