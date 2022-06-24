@@ -291,6 +291,7 @@ void Layer::RecolorSelectedPoints(std::unordered_map<int, std::shared_ptr<Vorono
 {
     pixelsToUpdate.clear();
 
+    // If there's any room f
     for (int x = 0; x < sizeX; x++)
         for (int y = 0; y < sizeY; y++)
         {

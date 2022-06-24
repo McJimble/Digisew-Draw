@@ -1,5 +1,4 @@
 #include "DynamicColor.h"
-#include "Vector3D.h"
 #include <iostream>
 
 float DynamicColor::edgeThreshold = 0.99f;
@@ -98,18 +97,18 @@ void DynamicColor::DensityToColor()
 void DynamicColor::BarycentricToColor()
 {
     if (!minPt || !triNodeA || !triNodeB) return; // For sanity
-    Vector3D additiveColor;
+    double r, g, b;
     const PixelRGB& colA = minPt->Get_NormalEncoding();
     const PixelRGB& colB = triNodeA->Get_AverageColor();
     const PixelRGB& colC = triNodeB->Get_AverageColor();
 
-    additiveColor[0] = Helpers::Clamp(baryU * colA.r + baryV * colB.r + baryW * colC.r, 0, 255);
-    additiveColor[1] = Helpers::Clamp(baryU * colA.g + baryV * colB.g + baryW * colC.g, 0, 255);
-    additiveColor[2] = Helpers::Clamp(baryU * colA.b + baryV * colB.b + baryW * colC.b, 0, 255);
+    r = Helpers::Clamp(baryU * colA.r + baryV * colB.r + baryW * colC.r, 0, 255);
+    g = Helpers::Clamp(baryU * colA.g + baryV * colB.g + baryW * colC.g, 0, 255);
+    b = Helpers::Clamp(baryU * colA.b + baryV * colB.b + baryW * colC.b, 0, 255);
 
-    affectedPixel->r = (Uint8)additiveColor[0];
-    affectedPixel->g = (Uint8)additiveColor[1];
-    affectedPixel->b = (Uint8)additiveColor[2];
+    affectedPixel->r = r;
+    affectedPixel->g = g;
+    affectedPixel->b = b;
 }
 
 // I know this could just be added in the same function as above, 
