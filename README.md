@@ -42,8 +42,9 @@ Here is a brief explanation of the available parameters:
     
 **Controls**
 - *Right click*: This will create a selection box that will select any points inside of them. When a point is selected, it will become white and can be interacted with in many different means.
-- *Left click*: This will create new points in whatever region currently mouse over if no other points are currently selected. After creating a new point (or when multiple points ARE selected), holding the left mouse and moving it around the click location will set the color of all voronoi cells. The color is based on the direction the mouse is relative to where it was first clicked. You will see the color updated in real time. If in density mode, density of the cells will be set based purely on distance from the initial click point.- Middle mouse: While held, all selected points will be displaced based on mouse movement. Once released, the entire map will rebuild with the new cell posisions
-   with all other values remaining constant.
+- *Left click*: This will create new points in whatever region currently mouse over if no other points are currently selected. After creating a new point (or when multiple points ARE selected), holding the left mouse and moving it around the click location will set the color of all voronoi cells. The color is based on the direction the mouse is relative to where it was first clicked. You will see the color updated in real time. If in density mode, density of the cells will be set based purely on distance from the initial click point, where further away equates to a darker color & higher density.
+- *Middle mouse*: While held, all selected points will be displaced based on mouse movement. Once released, the entire map will rebuild with the new cell posisions
+with all other values remaining constant.
 - *DELETE key*: Deletes all points currently selected and rebuild the map.
 - *S key*: Prompts the user to save whatever is rendered in the currently focused window. Essentially saves a "screenshot" and places it in the output/images directory.
 - *D key*: Switches to "density mode", where only the density map is displayed and affected by interaction. Deleting and moving points affects the normal map as well, though, as cells and regions are shared in both modes!
