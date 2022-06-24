@@ -18,7 +18,7 @@ Currently in active development.
 
 # Using Digisew-Draw
 
-The main control flow of the program consists of a main drawing window where [voronoi cells]https://en.wikipedia.org/wiki/Voronoi_diagram#:~:text=In%20mathematics%2C%20a%20Voronoi%20diagram,%2C%20sites%2C%20or%20generators) are placed and assigned custom colors to create a voronoi diagram in real-time.
+The main control flow of the program consists of a main drawing window where [voronoi cells](https://en.wikipedia.org/wiki/Voronoi_diagram#:~:text=In%20mathematics%2C%20a%20Voronoi%20diagram,%2C%20sites%2C%20or%20generators) are placed and assigned custom colors to create a voronoi diagram in real-time.
 Neighboring cells will have their colors blended together at pixels that do not lie in the center of a cell. Separate layers or "regions" of cells can be specified that are completely independent of one another as well. The end result will be a user-constructed normal map and density map that will be parsed by the Digisew algorithm to output a usable stitch pattern that can be saved and viewed by the program. Each pattern will also be saved in .dst format and can be viewed with any program that can read them. [Embroider modder](https://embroidermodder.org/) or [Embird](https://www.embird.net/download.htm) are potential free methods of reading them.
 
   **Running the program**
@@ -26,8 +26,8 @@ Neighboring cells will have their colors blended together at pixels that do not 
   Before running the program, there are some inital parameters that should be set based what you desire out of the instance.
   In the res/params directory, there is a default parameters file called "start_params.txt" that shows the format and inputs for a parameter file.
   To customize parameters to your liking, do either of the following:
-    1. Run the program with no console arguments, and set desired values in the default "start_params.txt" file
-    2. Run the program with the first console argument specifying the file name of your own parameter .txt file that follows the same format and is in the same directory.
+  1. Run the program with no console arguments, and set desired values in the default "start_params.txt" file
+  2. Run the program with the first console argument specifying the file name of your own parameter .txt file that follows the same format and is in the same directory.
     
 Here is a brief explanation of the available parameters:
 - width: The width of the main drawing window.
