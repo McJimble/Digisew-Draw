@@ -55,7 +55,7 @@ public:
 	 *  layer currently. This allows us to track specific pixel values to construct
 	 *  the final texture outside of this scope.
 	 * 
-	 *  FOR EFFICIENCY SAKE this doesn't bound check so don't pass in 
+	 *  FOR EFFICIENCY SAKE this doesn't bound check so don't pass in out of bounds coords.
 	 */
 	void Set_PixelRefs(int x, int y, PixelRGB* normalPix, PixelRGB* densityPix);
 
