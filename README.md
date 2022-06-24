@@ -35,7 +35,7 @@ Here is a brief explanation of the available parameters:
 - vectorFieldDensityFac: a multiplier/factor for the density of vectors that visualize the stitch directions. A higher value will generate more vectors in the field.
 - defaultNormalMap: if provided, any "static" layers specified in the zone map will be **uneditable** and will only display pixels from this image in the normal view
 - defaultDensityMap: same as above, but applies to the density map view only.
-- zoneMapName: This will specify what "regions" will exist. A region in an area of the drawing window that is completely separate from all other areas, and its points/colors will not affect any other layers or regions in any way. 
+- zoneMapName: This will specify what "regions" will exist. A region in an area of the drawing window that is completely separate from all other areas, and its points/colors will not affect any other layers or regions in any way. Leaving this blank will place one region across the entire canvas!
 	
 **Please note** that all pixels that are white (RGB of 255, 255, 255) or have zero opacity (alpha of 0) will be assigned as the "static region", which will be uneditable and will only display pixels from the corresponding default maps provided in the other parameters! Also, regions are dictated based on how many unique pixel values were detected in the zone image. Therefore, images provided should NOT have filtering or heavy compression to work properly. Creating them with a pencil tool in any image editting program will work nicely for this.
     
