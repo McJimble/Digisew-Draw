@@ -3,7 +3,7 @@ Date: 6/23/2022
 
 # Digisew-Draw
 
-An sketch-based program that is used to draw images specifically tailored for research purposes at Clemson University.
+A sketch-based program that is used to draw images specifically tailored for research purposes at Clemson University.
 Created using C++ and the SDL2 library for simple rendering.
 
 Currently in active development.
